@@ -8,7 +8,7 @@ mod publisher;
 
 use anyhow::{Context, Result};
 use chrono::{Timelike, Utc};
-use libasterix::asterisk::cat062::{
+use libasterix::asterix::cat062::{
     encode_cat062_block, icao_to_track_number, parse_icao_address, velocity_to_cartesian,
     Cat062Record,
 };
