@@ -1,0 +1,21 @@
+# Sentrix Configuration
+# OpenSky to ASTERIX CAT062 converter
+
+# Polling interval in seconds
+poll_interval_secs = 5
+
+# Geographic bounding box for filtering aircraft (Switzerland)
+[bounding_box]
+min_lat = 45.8   # Southern boundary
+max_lat = 47.8   # Northern boundary
+min_lon = 5.9    # Western boundary
+max_lon = 10.5   # Eastern boundary
+
+# ASTERIX data source identifier
+[asterix]
+sac = 1   # System Area Code
+sic = 1   # System Identification Code
+
+# UDP output settings
+[udp]
+destination = "127.0.0.1:4000"
