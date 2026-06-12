@@ -80,17 +80,18 @@ UDP publisher ready: -> 127.0.0.1:4000
 
 ## Simulation Mode
 
-Instead of live OpenSky data, Sentrix can replay a [SimBrief](https://www.simbrief.com/) LIDO-layout OFP bulletin, publishing a single simulated aircraft as CAT-062 in real time:
+Instead of live OpenSky data, Sentrix can replay one or more [SimBrief](https://www.simbrief.com/) LIDO-layout OFP bulletins, publishing the simulated aircraft as CAT-062 in real time:
 
 ```bash
 cargo run -- --simulate simulations/lsgg_lfpg.txt
+cargo run -- --simulate simulations/lsgg_lfpg.txt simulations/lsgg_lszh.txt  # concurrent flights
 ```
 
-No OpenSky credentials are needed in this mode. Sentrix parses the FLIGHT LOG waypoints (position, flight level, TAS, GS), builds a timeline from leg distance and ground speed, and interpolates position, altitude and speeds between waypoints on every tick (`poll_interval_secs`). On arrival, the aircraft holds its final position with zero velocity.
+No OpenSky credentials are needed in this mode. Sentrix parses the FLIGHT LOG waypoints (position, flight level, TAS, GS), builds a timeline from leg distance and ground speed, and interpolates position, altitude and speeds between waypoints on every tick (`poll_interval_secs`). All flights depart together at startup; each tick publishes one record per flight, batched into a single CAT-062 block. On arrival, an aircraft holds its final position with zero velocity.
 
 When the input is a full bulletin (not just a flight-log extract), the other sections refine the simulation:
 
-- **Identity**: the ATC callsign (ICAO flight plan item 7) is published in the CAT-062 target identification (I062/245) and the Mode-S address (`CODE/` item) seeds the 12-bit track number, for flight-plan correlation. `[simulation]` config values override them. *Known limitation: the full 24-bit Mode-S address belongs in I062/380 (ADR), which libasterix 0.1.0 does not yet encode — `icao_address` is populated on the record and will be transmitted once the crate supports it.*
+- **Identity**: the ATC callsign (ICAO flight plan item 7) is published in the CAT-062 target identification (I062/245) and the Mode-S address (`CODE/` item) seeds the 12-bit track number, for flight-plan correlation. `[simulation]` config values override them (single-flight mode only). Concurrent flights whose Mode-S codes share a track number — common when bulletins come from the same SimBrief airframe — are remapped onto fallback addresses with a warning. *Known limitation: the full 24-bit Mode-S address belongs in I062/380 (ADR), which libasterix 0.1.0 does not yet encode — `icao_address` is populated on the record and will be transmitted once the crate supports it.*
 - **Speed profile**: V2 (takeoff runway analysis) and VREF (landing distance table, interpolated at the planned landing weight) drive realistic acceleration after takeoff and deceleration to the threshold on final, with a ~3° glide — bringing the replay duration in line with the plan's ETE.
 - **Winds aloft** are parsed and reserved for future climb/descent modelling.
 
@@ -99,12 +100,18 @@ A flight-log-only extract still works; the refinements simply switch off.
 Output:
 
 ```
-Simulation: LSGG/22 -> LFPG/27R | 22 waypoints, 236 nm, estimated 42 min (log ETE: 45 min)
-Aircraft: ALU (A320, N320SB) icao24 1349
-Speed profile: V2 154 kt, VREF 133 kt
+Flight ALU: LSGG/22 -> LFPG/27R | 22 waypoints, 236 nm, estimated 41 min (log ETE: 45 min)
+  Aircraft: ALU (A320, N320SB) icao24 1349
+  Speed profile: V2 154 kt, VREF 133 kt
+Flight ALU500: LSGG/04 -> LSZH/14 | 20 waypoints, 151 nm, estimated 29 min (log ETE: 30 min)
+  Aircraft: ALU500 (A320, N320SB) icao24 1349
+  Speed profile: V2 155 kt, VREF 133 kt
+Warning: ALU500 icao24 1349 shares a 12-bit track number with an earlier flight - using 4b1234 instead
 
-[08:19:59] ALU  46.2383    6.1100     0 ft GS 154 kt TAS 154 kt trk 225 -> CLIMB (35 bytes)
-[08:20:04] ALU  46.2369    6.1080    93 ft GS 168 kt TAS 168 kt trk 225 -> CLIMB (35 bytes)
+Starting simulation loop (2 flights)...
+
+[08:19:59] ALU  46.2383    6.1100     0 ft GS 154 kt TAS 150 kt trk 225 -> CLIMB
+[08:19:59] ALU500  46.2383    6.1100     0 ft GS 155 kt TAS 168 kt trk 045 -> CLIMB
 ```
 
 Notes:

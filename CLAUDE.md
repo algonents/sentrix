@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 cargo run                    # Live mode (reads conf/sentrix.toml + conf/credentials.json)
 cargo run -- --simulate simulations/lsgg_lfpg.txt  # Simulation mode (no credentials needed)
+cargo run -- --simulate simulations/lsgg_lfpg.txt simulations/lsgg_lszh.txt  # Multiple concurrent flights
 cargo build --release        # Optimized build
 cargo test                   # Run all tests
 cargo test test_parse_config # Run a single test by name
@@ -29,7 +30,7 @@ sim:   LIDO OFP bulletin  --parse_bulletin-->  LidoBulletin  --FlightPath::from_
 
 Six modules, each a thin layer with one responsibility:
 
-- **`main.rs`** — orchestrates both loops (`run_live` / `run_simulation`, selected by the `--simulate <file>` arg). The conversion function `state_to_cat062` lives here (not in `opensky.rs`) because it depends on `libasterix` types; keeping it in `main` avoids coupling the OpenSky client to ASTERIX concepts. The live loop polls on `poll_interval_secs`, and on `OpenSkyError::RateLimited` sleeps for the server-provided `retry-after` (or 30s fallback) *in addition to* the normal poll interval. The sim loop publishes one record per tick using the same interval.
+- **`main.rs`** — orchestrates both loops (`run_live` / `run_simulation`, selected by the `--simulate <file>` arg). The conversion function `state_to_cat062` lives here (not in `opensky.rs`) because it depends on `libasterix` types; keeping it in `main` avoids coupling the OpenSky client to ASTERIX concepts. The live loop polls on `poll_interval_secs`, and on `OpenSkyError::RateLimited` sleeps for the server-provided `retry-after` (or 30s fallback) *in addition to* the normal poll interval. The sim loop replays one or more bulletins on the same interval, batching one record per flight per tick into a single CAT-062 block; flights whose Mode-S codes share a 12-bit track number are remapped onto fallback addresses with a warning (common case: bulletins generated from the same SimBrief airframe). `[simulation]` config identity overrides apply in single-flight mode only.
 - **`lido.rs`** — SimBrief LIDO OFP bulletin parser. The FLIGHT LOG section is the only mandatory one; waypoint blocks are located by fixed-width column slices — column positions are load-bearing.
 - **`simulation.rs`** — turns waypoints into a time-indexed `FlightPath` and interpolates state with `sample(elapsed)`. How the timeline is built, the V2/VREF profile synthesis, and the design decisions behind it are documented in `docs/SIMULATION.md`.
 - **`opensky.rs`** — OpenSky REST client + OAuth2 client-credentials flow. `TokenManager` caches the access token behind an `Arc<RwLock<...>>` and refreshes 60 s before expiry. `StateVector` has a **custom `Deserialize`** because OpenSky returns state vectors as positional JSON arrays (17 or 18 elements); the field-to-index mapping in the struct comments is load-bearing — do not reorder. `OpenSkyError` distinguishes rate limits from other failures so the main loop can back off specifically on 429.
