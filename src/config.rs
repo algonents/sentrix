@@ -23,6 +23,10 @@ pub struct Config {
 
     /// UDP output configuration
     pub udp: UdpConfig,
+
+    /// Simulation mode settings (used with --simulate)
+    #[serde(default)]
+    pub simulation: SimulationConfig,
 }
 
 /// ASTERIX-specific configuration
@@ -39,6 +43,21 @@ pub struct AsterixConfig {
 pub struct UdpConfig {
     /// Destination address (IP:port)
     pub destination: String,
+}
+
+/// Identity overrides for the simulated aircraft in simulation mode.
+///
+/// When unset, the values from the OFP bulletin are used (ATC callsign and
+/// Mode-S CODE from the ICAO flight plan), with hardcoded fallbacks for
+/// bulletins that lack a flight plan section.
+#[derive(Debug, Default, Deserialize)]
+pub struct SimulationConfig {
+    /// Callsign published in the CAT062 target identification
+    #[serde(default)]
+    pub callsign: Option<String>,
+    /// 24-bit ICAO address as a hex string (also seeds the track number)
+    #[serde(default)]
+    pub icao24: Option<String>,
 }
 
 fn default_poll_interval() -> u64 {
@@ -90,5 +109,34 @@ destination = "127.0.0.1:4000"
         assert_eq!(config.asterix.sac, 1);
         assert_eq!(config.asterix.sic, 2);
         assert_eq!(config.udp.destination, "127.0.0.1:4000");
+        // [simulation] section is optional; unset values defer to the bulletin
+        assert_eq!(config.simulation.callsign, None);
+        assert_eq!(config.simulation.icao24, None);
+    }
+
+    #[test]
+    fn test_parse_simulation_config() {
+        let toml = r#"
+[bounding_box]
+min_lat = 45.0
+max_lat = 55.0
+min_lon = -5.0
+max_lon = 15.0
+
+[asterix]
+sac = 1
+sic = 2
+
+[udp]
+destination = "127.0.0.1:4000"
+
+[simulation]
+callsign = "SWR123"
+icao24 = "4b17e5"
+"#;
+
+        let config: Config = toml::from_str(toml).unwrap();
+        assert_eq!(config.simulation.callsign.as_deref(), Some("SWR123"));
+        assert_eq!(config.simulation.icao24.as_deref(), Some("4b17e5"));
     }
 }

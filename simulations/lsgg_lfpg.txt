@@ -1,0 +1,480 @@
+[ OFP ]
+--------------------------------------------------------------------
+ALU0000   12JUN2026    LSGG-LFPG   A320 N320SB  RELEASE 0905 12JUN26
+OFP 0                GENEVA-CHARLES-DE-GAULLE
+                         WX PROG 1206 1209 1212   OBS 1200 1200 1200
+	
+  ATC C/S   ALU          LSGG/GVA   LFPG/CDG      CRZ SYS       CI 6
+12JUN2026   N320SB       0800/0820  0905/0913     GND DIST       238
+A320-200 / CFM56-5B4/P              STA  0920     AIR DIST       266
+                         CTOT:....                G/C DIST       220
+                                                  AVG WIND   312/038
+MAXIMUM    TOW  78000  LAW  66000  ZFW  62500     AVG W/C       M037
+ESTIMATED  TOW  65255  LAW  63189  ZFW  60055     AVG ISA       P008
+                                                  AVG FF KGS/HR 2716
+                                                  FUEL BIAS    P00.0
+ALTN LFOK                                         TKOF ALTN  .......
+FL STEPS LSGG/0300/
+--------------------------------------------------------------------
+DISP RMKS   NIL
+
+--------------------------------------------------------------------
+         PLANNED FUEL
+---------------------------------
+FUEL           ARPT   FUEL   TIME
+---------------------------------
+TRIP            CDG   2066   0045
+CONT 15 MIN            679   0015
+ALTN            XCR   1376   0037
+FINRES                1079   0030
+---------------------------------
+MINIMUM T/OFF FUEL    5200   0207
+---------------------------------
+EXTRA                    0   0000
+---------------------------------
+T/OFF FUEL            5200   0207
+TAXI            GVA    230   0020
+---------------------------------
+BLOCK FUEL      GVA   5430
+PIC EXTRA            .....
+TOTAL FUEL           .....
+REASON FOR PIC EXTRA ............
+--------------------------------------------------------------------
+FMC INFO:
+FINRES+ALTN           2455
+TRIP+TAXI             2296
+--------------------------------------------------------------------
+NO TANKERING RECOMMENDED (P)
+--------------------------------------------------------------------
+I HEREWITH CONFIRM THAT I HAVE PERFORMED A THOROUGH SELF BRIEFING
+ABOUT THE DESTINATION AND ALTERNATE AIRPORTS OF THIS FLIGHT 
+INCLUDING THE APPLICABLE INSTRUMENT APPROACH PROCEDURES, AIRPORT 
+FACILITIES, NOTAMS AND ALL OTHER RELEVANT PARTICULAR INFORMATION.
+
+DISPATCHER: DENNIS FUENTES              PIC NAME: LUDIN, ANWAR
+
+TEL: +1 800 555 0199               PIC SIGNATURE: ...............
+
+
+
+
+ALTERNATE ROUTE TO:                                    FINRES   1079
+APT      TRK DST              VIA                 FL  WC  TIME  FUEL
+--------------------------------------------------------------------
+LFOK/28  101 145  DIKOL6D DIKOL DIKOL2P          110 P014 0037  1376
+--------------------------------------------------------------------
+
+MEL/CDL ITEMS DESCRIPTION
+------------- -----------
+
+--------------------------------------------------------------------
+
+ROUTING:
+
+ROUTE ID: DEFRTE
+LSGG/22 DIPIR1A DIPIR T37 IBABA DCT DJL DCT TINIL TINIL9W LFPG/27R
+
+--------------------------------------------------------------------
+DEPARTURE ATC CLEARANCE:
+.
+.
+.
+--------------------------------------------------------------------
+                         OPERATIONAL IMPACTS
+                         -------------------
+WEIGHT CHANGE UP 1.0          TRIP  P 0018 KGS   TIME P 0000
+WEIGHT CHANGE DN 1.0          TRIP  M 0051 KGS   TIME P 0000
+FL CHANGE     UP FL1                 NOT AVAILABLE
+FL CHANGE     DN FL1          TRIP  M 0013 KGS   TIME P 0001
+FL CHANGE     DN FL2          TRIP  M 0006 KGS   TIME P 0001
+SPD CHANGE    CI 0            TRIP  M 0005 KGS   TIME P 0000
+SPD CHANGE    CI 50           TRIP  P 0028 KGS   TIME M 0001
+--------------------------------------------------------------------
+
+
+
+--------------------------------------------------------------------
+ATIS:
+.
+.
+--------- --------- --------- --------- --------- --------- --------
+RVSM: ALT SYS  LEFT:             STBY:             RIGHT:
+
+--------- --------- --------- --------- --------- --------- --------
+--------------------------------------------------------------------
+                                TIMES
+                                -----
+				    
+               ESTIMATED        SKED              ACTUAL
+
+OUT            0800Z/1000L      0800Z/1000L       ......Z
+
+OFF            0820Z/1020L      0820Z/1020L       ......Z
+
+ON             0905Z/1105L      0912Z/1112L       ......Z
+
+IN             0913Z/1113L      0920Z/1120L       ......Z
+
+BLOCK TIME     0113             0120              ......
+
+--------------------------------------------------------------------
+                               WEIGHTS
+                               -------
+
+                EST      MAX     ACTUAL
+
+PAX             156              ......
+
+BAG/CARGO       3.9              ......
+
+PAYLOAD        16.3              ......
+
+ZFW            60.1     62.5     ......
+
+FUEL            5.4      8.2     ......  POSS EXTRA 2.8
+
+TOW            65.3     68.1  LDG......
+
+STAB TRIM                        ......
+
+LAW            63.2     66.0     ......
+
+--------------------------------------------------------------------
+                       TERRAIN CLEARANCE CHECK
+                       -----------------------
+DD CHECK - TERRAIN CLEARANCE CHECK DISABLED
+
+DP CHECK - TERRAIN CLEARANCE CHECK DISABLED
+--------------------------------------------------------------------
+
+
+
+                             FLIGHT LOG                             
+                             ----------                             
+
+MOST CRITICAL MORA 07800 FEET AT PAS///MXSHR 01 AT NANOP
+--------------------------------------------------------------------
+AWY                           FL   IMT   MN    WIND  OAT  EFOB  PBRN
+POSITION    LAT      EET ETO MORA  ITT  TAS    COMP  TDV
+IDENT       LONG    TTLT ATO DIS  RDIS   GS     SHR  TRP  AFOB  ABRN
+FREQ
+--------------------------------------------------------------------
+                                   222                     5.2   0.2
+GENEVA      N4614.3      ...  74   225         P004     
+LSGG       E00606.6 0000 ...       238  276               ....  ....
+
+DIPIR1A                      050   328  .41 005/005   10   4.9   0.5
+PASSEIRY    N4609.8 0002 ...  78   331         P004  P05
+PAS        E00600.0 0002 ...   6   232  276          436  ....  ....
+116.60
+
+MARSEILLE FIR                                                       
+-LFMM       N4610.7 0000 ...
+           E00559.3 0002 ...   1   231
+
+DIPIR1A                      140   328  .59 339/029  M02   4.6   0.8
+GG617       N4624.6 0003 ...  55   331         M029  P11
+GG617      E00548.1 0005 ...  16   215  351          436  ....  ....
+
+DIPIR1A                      176   328  .63 329/038  M09   4.4   1.0
+KELUK       N4633.3 0002 ...  44   330         M038  P11
+KELUK      E00541.1 0007 ...  10   205  365          432  ....  ....
+
+DIPIR1A                      198   328  .66 326/041  M15   4.3   1.1
+DIPIR       N4640.2 0001 ...  40   331         M041  P10
+DIPIR      E00535.6 0008 ...   8   197  376          432  ....  ....
+
+T37                          213   327  .68 325/042  M19   4.2   1.2
+LUKID       N4644.5 0001 ...  38   330         M042  P09
+LUKID      E00532.1 0009 ...   5   192  385          432  ....  ....
+
+T37                          236   328  .72 319/039  M24   4.1   1.3
+IBABA       N4652.6 0002 ...  36   330         M038  P08
+IBABA      E00525.2 0011 ...   9   183  406          438  ....  ....
+
+DCT                          288   358  .78 311/038  M36   3.9   1.5
+DIJON LONGV N4716.2 0003 ...  37   000         M036  P07
+DJL        E00505.8 0014 ...  27   156  432          438  ....  ....
+111.45
+
+DCT                          300   359  .78 309/037  M39   3.8   1.6
+T O C       N4723.2 0001 ...  39   000  465    M024  P06
+           E00505.9 0015 ...   7   149  441       0  437  ....  ....
+
+DCT                          300   317  .71 305/042  M39   3.8   1.7
+TINIL       N4735.3 0002 ...  38   319  424    M025  P06
+TINIL      E00505.9 0017 ...  12   137  399       0  426  ....  ....
+
+TINIL9W                      300   317  .71 305/042  M39   3.7   1.7
+FF302       N4744.2 0002 ...  36   319  426    M041  P06
+FF302      E00454.8 0019 ...  12   125  385       0  426  ....  ....
+
+
+
+
+
+AWY                           FL   IMT   MN    WIND  OAT  EFOB  PBRN
+POSITION    LAT      EET ETO MORA  ITT  TAS    COMP  TDV
+IDENT       LONG    TTLT ATO DIS  RDIS   GS     SHR  TRP  AFOB  ABRN
+FREQ
+--------------------------------------------------------------------
+TINIL9W                      300   307  .71 307/041  M39   3.4   2.0
+NANOP       N4815.7 0007 ...  28   309  426    M040  P06
+NANOP      E00414.4 0026 ...  42    83  386       1  434  ....  ....
+
+TINIL9W                      300   308  .71 307/041  M39   3.4   2.0
+T O D       N4820.2 0001 ...  27   309  426    M041  P06
+           E00406.3 0027 ...   7    76  385       1  434  ....  ....
+
+TINIL9W                      296   307  .78 307/041  M38   3.4   2.0
+FF301       N4820.9 0000 ...  28   309         M041  P06
+FF301      E00405.0 0027 ...   1    75  425          434  ....  ....
+
+TINIL9W                      223   301  .70 307/049  M21   3.4   2.1
+URELO       N4832.3 0004 ...  27   303         M049  P09
+URELO      E00343.9 0031 ...  18    57  386          429  ....  ....
+
+TINIL9W                      191   299  .65 308/046  M15   3.3   2.1
+OKIPA       N4836.7 0001 ...  27   301         M046  P08
+OKIPA      E00333.8 0032 ...   8    49  365          429  ....  ....
+
+TINIL9W                                                    3.1   2.3
+CHARLES-DE- N4900.6 0013 ...                            
+LFPG       E00232.9 0045 ...  49                          ....  ....
+
+
+
+
+
+
+
+--------------------------------------------------------------------
+                          WIND INFORMATION                          
+                          ----------------                          
+
+CLIMB            T O C            TINIL            FF302
+350 314/037 -51  340 314/037 -49  340 308/044 -49  340 308/044 -49
+310 310/037 -42  320 312/037 -44  320 307/043 -44  320 307/043 -44
+200 326/042 -16  300 309/037 -39  300 305/042 -39  300 305/042 -39
+150 337/031 -04  280 312/038 -34  280 308/042 -34  280 308/042 -34
+100 352/018 +02  260 315/039 -29  260 311/043 -29  260 311/043 -29
+
+NANOP            T O D            DESCENT
+340 299/040 -49  340 299/040 -49  350 302/040 -51
+320 303/040 -44  320 303/040 -44  310 305/041 -42
+300 307/041 -39  300 307/041 -39  200 307/047 -16
+280 308/040 -34  280 308/040 -34  150 303/039 -05
+260 308/040 -29  260 308/040 -29  100 306/037 +04
+
+--------------------------------------------------------------------
+
+
+
+[ ATC Flight Plan ]
+--------------------------------------------------------------------
+                          ICAO FLIGHT PLAN                           
+                          ----------------                           
+
+FF LSASZQZX LFMMZQZX LFEEZQZX LFFFZQZX
+120905 CYULSBFP
+(FPL-ALU-IS
+-A320/M-SDE3FGHIRWY/LB1
+-LSGG0800
+-N0424F300 DIPIR1A DIPIR T37 IBABA DCT DJL DCT TINIL TINIL9W
+-LFPG0035 LFOK
+-PBN/A1B1C1D1O1S1 DOF/260612 REG/N320SB EET/LFMM0002 LFEE0007
+ LFFF0010 CODE/1349 OPR/ALU PER/C RMK/TCAS)
+
+
+
+[ Additional Info ]
+--------------------------------------------------------------------
+D I S P A T C H  B R I E F I N G  I N F O    ALU0000   LSGG/LFPG
+
+
+
+
+
+
+[ Runway Analysis ]
+--------------------------------------------------------------------
+
+TAKEOFF AND LANDING REPORT ALU .... LSGG-LFPG 12JUN26
+TLR-1 SEQ-CALCULATE 12JUN26 0905Z
+A/C N320SB  A320-200 CFM56-5B4/P  BEW/CG 43780/.....
+
+/// TAKEOFF DATA ///
+
+APT   PRWY  POAT PWIND  PQNH  PMRTW FLP MT V1 VR V2 PTOW MFPTW LIMIT
+LSGG  22    21.0 197M04 1027  7800  1   64 55 55 56 6526 6807  AFM
+
+RMKS FLEX - SEL TEMP 64
+     BLEEDS ON
+
+---- ---- ------ ----- ------- --- --- --- --- --- -----------------
+RWY  OAT  WIND   QNH   MRTW    FLP V1  VR  V2  PWR CONFIG/CONDITION
+
+--------------------------- ACARS RUNWAYS --------------------------
+RWY          ACARS  LENGTH PMTOW NOTES
+04                   12795  7800 ILS 110.90
+22                   12795  7800 ILS 108.70
+
+-------------------- DRY RWY - PTOW - CALM WIND --------------------
+RWY          MTOW MT CONFIG                   FLP  V1  VR  V2  LIMIT
+04           7800 64 FLEX - BLEEDS ON           1 156 156 157  AFM
+22           7800 63 FLEX - BLEEDS ON           1 153 153 154  AFM
+
+--------------- DRY RWY - PTOW PLUS 2000 - CALM WIND ---------------
+RWY          MTOW MT CONFIG                   FLP  V1  VR  V2  LIMIT
+04           7800 62 FLEX - BLEEDS ON           1 155 156 157  AFM
+22           7800 60 FLEX - BLEEDS ON           1 151 151 152  AFM
+
+-------------------- WET RWY - PTOW - CALM WIND --------------------
+RWY          MTOW MT CONFIG                   FLP  V1  VR  V2  LIMIT
+04           7800 63 FLEX - BLEEDS ON           1 149 153 154  AFM
+22           7800 62 FLEX - BLEEDS ON           1 147 150 151  AFM
+
+--------------- WET RWY - PTOW PLUS 2000 - CALM WIND ---------------
+RWY          MTOW MT CONFIG                   FLP  V1  VR  V2  LIMIT
+04           7800 61 FLEX - BLEEDS ON           1 147 154 155  AFM
+22           7800 60 FLEX - BLEEDS ON           1 145 151 152  AFM
+
+/// LANDING DATA ///
+
+APT   PRWY  POAT PWIND  PQNH  PMRLW FLP  PLDW  LIMIT
+LFPG  27R   18.0 259M13 1025  6600  FULL 6319  AFM
+
+RMKS NONE
+
+-------- ---- ------ ----- ------- --- ----- --- -------------------
+RWY      OAT  WIND   QNH   MRLW    FLP VREF  PWR CONFIG/CONDITION
+
+
+
+
+--------------------------- ACARS RUNWAYS --------------------------
+RWY          ACARS  LENGTH PMRLW NOTES
+08L                  13589  6600 ILS 108.70
+08R                   8858  6600 ILS 108.55
+09L                   8858  6600 ILS 109.35
+09R                  13780  6600 ILS 110.10
+26L                   8858  6600 ILS 108.35
+26R                  11864  6600 ILS 111.95
+27L                  11811  6600 ILS 110.70
+27R                   8858  6600 ILS 110.35
+
+------------- FLAPS FULL - PACKS ON - NO ENROUTE ICING -------------
+DRY RWY / WET RWY
+            08L            08R            09L            09R
+  OAT       13589 FT       8858 FT        8858 FT        13780 FT
+   13       6600A/6600A    6600A/6600A    6600A/6600A    6600A/6600A
+ / 18       6600A/6600A    6600A/6600A    6600A/6600A    6600A/6600A
+   23       6600A/6600A    6600A/6600A    6600A/6600A    6600A/6600A
+HW/10KT         0/    0        0/    0        0/    0        0/    0
+TW/10KT         0/    0        0/    0        0/    0        0/    0
+
+            26L            26R            27L            27R
+  OAT       8858 FT        11864 FT       11811 FT       8858 FT
+   13       6600A/6600A    6600A/6600A    6600A/6600A    6600A/6600A
+ / 18       6600A/6600A    6600A/6600A    6600A/6600A    6600A/6600A
+   23       6600A/6600A    6600A/6600A    6600A/6600A    6600A/6600A
+HW/10KT         0/    0        0/    0        0/    0        0/    0
+TW/10KT         0/    0        0/    0        0/    0        0/    0
+
+-------- LANDING DISTANCE - FLAPS FULL - MAX MANUAL BRAKING --------
+                   ACTUAL            FACTORED
+  LDW     VREF     DRY      WET      DRY      WET
+  6200    132     2812     3665     3878     4858
+  6300    133     2847     3710     3931     4923
+/ 6400    134     2882     3755     3984     4989
+  6500    135     2917     3800     4038     5055
+  6600    136     2952     3846     4092     5121
+HW/KT              -17      -22      -20      -25
+TW/KT               52       67       80       98
+
+END TAKEOFF AND LANDING REPORT ALU .... LSGG-LFPG 12JUN26
+
+
+
+
+
+[ Airport WX List ]
+--------------------------------------------------------------------
+LSGG --> LFPG   ALU  0000 / 12JUN2026
+LIDO/WEATHER SERVICE       DATE : 12Jun2026   TIME : 09:05 UTC
+
+AIRMETs:
+  No Wx data available
+
+SIGMETs:
+  No Wx data available
+
+Tropical Cyclone SIGMETs:
+  No Wx data available
+
+Volcanic Ash SIGMETs:
+  No Wx data available
+
+Departure:
+LSGG/GVA  GENEVA
+  SA  120850  AUTO 20004KT 130V280 9999 FEW075 21/08 Q1027 NOSIG
+  FT  120825  1209/1315 24007KT CAVOK TX25/1215Z TN10/1304Z
+              TX29/1315Z
+              BECMG 1219/1221 VRB02KT
+              BECMG 1308/1310 06007KT
+
+Destination:
+LFPG/CDG  CHARLES-DE-GAULLE
+  SA  120900  26013KT 9999 OVC020 18/14 Q1025 NOSIG
+  FT  120500  1206/1312 26010G20KT 9999 OVC012 TX22/1216Z TN14/1303Z
+              BECMG 1212/1214 BKN025
+              TEMPO 1301/1305 BKN012
+
+Destination Alternates:
+LFOK/XCR  VATRY
+  SA  120900  AUTO 25016KT 9999 OVC015 17/14 Q1024 TEMPO 4000 RADZ
+              BKN014 OVC020
+  FT  120500  1206/1306 25012KT 9999 BKN020
+              PROB30 TEMPO 1206/1210 4000 RADZ BKN014 OVC020
+              PROB30 TEMPO 1301/1306 BKN009 BKN013
+
+
+  AIRPORTLIST ENDED
+
+
+
+[ Company NOTAM ]
+--------------------------------------------------------------------
+==========
+CREW ALERT
+==========
+
+SB007/14   
+  SUBJECT: AUTO COST INDEXES
+  WHEN PLANNING A COST INDEX, 2 OPTIONS ARE AVAILABLE. PILOTS MAY
+  EITHER SELECT A SPECIFIC COST INDEX NUMBER FROM THE LIST, OR THEY
+  MAY SELECT "AUTO". WHEN PLANNING AN "AUTO" COST INDEX, THE SYSTEM
+  WILL REFERENCE THE SCHEDULED "TIME ENROUTE" OPTION AND ATTEMPT TO
+  CHOOSE A COST INDEX WHICH CLOSELY MATCHES THIS VALUE. NOTE THAT
+  THE "TIME ENROUTE" OPTION IS MEANT AS A GATE TO GATE TIME (AS
+  INDICATED ON AN AIRLINE'S FLIGHT SCHEDULE, FOR EXAMPLE). IF A
+  "TIME ENROUTE" OF 2:30 IS SELECTED, THE SYSTEM WILL SUBTRACT THE
+  TAXI TIMES FROM THIS VALUE TO DETERMINE THE SCHEDULED AIR TIME. IT
+  WILL THEN DETERMINE AND USE THE COST INDEX WHICH MATCHES THIS AIR
+  TIME.
+
+SB003/13   
+  SUBJECT: FLIGHT RELEASE UNITS
+  ALL FLIGHT CREW: PLEASE PAY SPECIAL ATTENTION TO THE UNITS
+  SELECTION WHEN GENERATING A FLIGHT PLAN. FAILURE TO IDENTIFY THE
+  CORRECT UNITS WHEN REFUELING PRIOR TO FLIGHT CAN RESULT IN
+  DEPARTING WITH INSUFFICIENT FUEL AND/OR AN ERRONEOUS PAYLOAD.
+
+=============
+CREW BULLETIN
+=============
+
+NIL
+
+
+==================== END OF LIDO-NOTAM-BULLETIN ====================
