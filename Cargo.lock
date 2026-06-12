@@ -475,7 +475,8 @@ dependencies = [
 [[package]]
 name = "libasterix"
 version = "0.1.0"
-source = "git+https://github.com/algonents/libasterix#e1122ec2a98c5902e1c1e5ed4b54a1e14625e483"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ad4a5ee416ec4d271fe74dcfacd4c51b9dc53fc761261c86d6586940b0721b2"
 dependencies = [
  "anyhow",
  "serde",

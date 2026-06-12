@@ -4,12 +4,12 @@
 # Polling interval in seconds
 poll_interval_secs = 5
 
-# Geographic bounding box for filtering aircraft (Switzerland)
+# Geographic bounding box for filtering aircraft (Switzerland, extended 30% per side)
 [bounding_box]
-min_lat = 45.8   # Southern boundary
-max_lat = 47.8   # Northern boundary
-min_lon = 5.9    # Western boundary
-max_lon = 10.5   # Eastern boundary
+min_lat = 45.2    # Southern boundary
+max_lat = 48.4    # Northern boundary
+min_lon = 4.52    # Western boundary
+max_lon = 11.88   # Eastern boundary
 
 # ASTERIX data source identifier
 [asterix]
@@ -19,3 +19,10 @@ sic = 1   # System Identification Code
 # UDP output settings
 [udp]
 destination = "127.0.0.1:4000"
+
+# Simulated aircraft identity overrides (used with --simulate <OFP bulletin>).
+# When unset, the identity comes from the bulletin's ICAO flight plan:
+# callsign from item 7, icao24 from the Mode-S CODE/ item.
+[simulation]
+#callsign = "SIM001"
+#icao24 = "4b1234"
