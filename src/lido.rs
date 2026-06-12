@@ -139,6 +139,17 @@ pub fn parse_flight_log(text: &str) -> Result<Vec<Waypoint>> {
             .unwrap_or("?")
             .to_string();
 
+        // FIR/UIR boundary rows ("-LFMM", "-LSAS", ...) are airspace
+        // annotations, not route fixes, and their printed coordinates are
+        // unreliable: SimBrief's own DIS/RDIS columns can place the crossing
+        // on the far side of the adjacent fix, so keeping the row folds the
+        // path back on itself. The crossing lies on the leg between the real
+        // fixes by definition - nothing is lost by dropping it.
+        if ident.starts_with('-') {
+            i += 2;
+            continue;
+        }
+
         waypoints.push(Waypoint {
             ident,
             lat,
@@ -505,7 +516,7 @@ PAS        E00600.0 0002 ...   6   232  276          436  ....  ....
     fn test_parse_full_log() {
         // The waypoint scan must not be confused by the other bulletin sections
         let wps = parse_flight_log(BULLETIN).unwrap();
-        assert_eq!(wps.len(), 18);
+        assert_eq!(wps.len(), 17);
         assert_eq!(wps.first().unwrap().ident, "LSGG");
         assert_eq!(wps.last().unwrap().ident, "LFPG");
     }
@@ -535,12 +546,9 @@ PAS        E00600.0 0002 ...   6   232  276          436  ....  ....
         let keluk = wps.iter().find(|w| w.ident == "KELUK").unwrap();
         assert_eq!(keluk.wind_comp_kts, Some(-38.0));
 
-        // FIR boundary: coordinates only
-        let fir = &wps[2];
-        assert_eq!(fir.ident, "-LFMM");
-        assert_eq!(fir.altitude_ft, None);
-        assert_eq!(fir.gs_kts, None);
-        assert_eq!(fir.wind_comp_kts, None);
+        // FIR boundary rows are skipped - their printed coordinates are
+        // unreliable and can fold the path back on itself
+        assert!(wps.iter().all(|w| !w.ident.starts_with('-')));
 
         // Destination: cumulative time is total flight time
         assert_eq!(wps.last().unwrap().cum_time_min, Some(45));
@@ -550,7 +558,7 @@ PAS        E00600.0 0002 ...   6   232  276          436  ....  ....
     fn test_parse_full_bulletin() {
         let b = parse_bulletin(BULLETIN).unwrap();
 
-        assert_eq!(b.waypoints.len(), 18);
+        assert_eq!(b.waypoints.len(), 17);
         assert_eq!(b.callsign.as_deref(), Some("ALU"));
         assert_eq!(b.registration.as_deref(), Some("N320SB"));
         assert_eq!(b.aircraft_type.as_deref(), Some("A320"));
