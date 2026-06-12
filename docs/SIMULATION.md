@@ -72,6 +72,24 @@ the replay has started.
   track number and time-of-day are populated; `track_status` is hardwired
   to `0x00`. No ROCD (I062/220), no mode-of-flight, no coasting/terminated
   flags.
+- **Acceleration is implicit and slightly inconsistent.** On a segment whose
+  endpoint speeds differ (e.g. 150→250 kt), three mechanisms disagree:
+  the leg *duration* uses the average speed (correct for uniform
+  acceleration); the *reported* GS is lerped linearly in time (which
+  describes uniform acceleration); but the *position* is also lerped
+  linearly in time, i.e. the aircraft actually moves at the constant
+  average speed for the whole segment (true acceleration would make
+  position quadratic in time). Reported velocity therefore deviates from
+  the positional derivative by up to **half the per-leg speed change**
+  (±50 kt in the example), peaking at segment boundaries. Invisible in
+  cruise (near-constant GS) and bounded on the short synthesized
+  departure/arrival legs, but a tracker or smoothing filter comparing
+  vx/vy against successive positions will see a small systematic bias on
+  accelerating segments. Deliberately not fixed in replay (it would be
+  investment inside `sample(t)`): the phase 3 agent erases it by
+  construction, since `step(dt)` integrates position *from* the current
+  GS, making reported speed and positional derivative identical by
+  definition, with acceleration an explicit rate limiter.
 
 ## Direction
 
@@ -264,7 +282,7 @@ is rework. Alternative ordering is legitimate if the controller demo becomes
 the priority: do phase 3+4 for a single aircraft first, then phase 1 — the
 phasing minimizes rework but is not sacred.
 
-**Phase 1 — Multi-flight scenario player** (replay-based; days)
+#### Phase 1 — Multi-flight scenario player (replay-based; days)
 
 - Scenario TOML (`--scenario <file>`, keeping `--simulate <bulletin>` as the
   single-flight shortcut): per-flight `template`, `callsign`, `icao24`,
@@ -280,7 +298,7 @@ phasing minimizes rework but is not sacred.
   terminate-after-arrival option, and the CAT-062 field audit against the
   actual consumer.
 
-**Phase 2 — Scenario solver** (replay timelines are closed-form; days)
+#### Phase 2 — Scenario solver (replay timelines are closed-form; days)
 
 - Closest-approach report between any two flights (where/when separation
   drops below a threshold).
@@ -289,17 +307,31 @@ phasing minimizes rework but is not sacred.
 - Build on replay before the agent migration; outputs remain valid as agent
   initial conditions.
 
-**Phase 3 — Kinematic agent** (the structural change; up to a week)
+#### Phase 3 — Kinematic agent (the structural change; up to a week)
 
 - `Aircraft` with state (lat, lon, alt_ft, gs_kts, track_deg) + intent
   (cleared FL, LNAV-route-or-assigned-heading, target speed) + `step(dt)`
   with the four rate limiters.
+- Optional fidelity upgrade: source the rate limits per aircraft type from
+  **OpenAP/WRAP** (TU Delft, LGPL-3.0, https://github.com/TUDelft-CNS-ATM/openap)
+  instead of hardcoded constants. WRAP is a purely kinematic model (speed,
+  altitude, vertical rate per flight phase, derived from ADS-B data) — the
+  same modeling philosophy as the agent, so it does not reopen the no-BADA
+  decision. The bulletin already provides the aircraft type; the WRAP data
+  tables are portable to Rust static tables (mind LGPL attribution if
+  embedded). This matters most for clearances: a mid-flight "climb FL360"
+  has no SimBrief profile to follow, so per-type rates are what make the
+  maneuver realistic. Assessed 2026-06-12 as not worth doing earlier than
+  this phase — in replay, intra-leg precision gains are invisible to the
+  consumer. Related prior art: **BlueSky** (same TU Delft group), an open
+  ATM simulator whose command stack (ALT/HDG/SPD/DCT) closely matches our
+  phase 4 protocol — a good reference for clearance semantics and LNAV.
 - LNAV: waypoint sequencing, turn anticipation, rejoin-route after vector.
 - `FlightPath` becomes the plan; targets derived from it per phase.
 - **Regression test**: uncleared agent flying its plan matches replay output
   within tolerance. Only after that passes is `sample()` deleted.
 
-**Phase 4 — Clearance channel** (days)
+#### Phase 4 — Clearance channel (days)
 
 - `tokio::select!` over tick timer + command source (UDP or TCP lines).
 - Text protocol: `<CALLSIGN> CFL <fl> | HDG <deg> | DCT <wpt> | SPD <kts>`,
