@@ -10,19 +10,20 @@ use libasterix::asterix::cat062::{
     Cat062Record,
 };
 
-use crate::replay::flight_path::FlightPath;
+use crate::replay::sampler;
 use crate::shared::cat062::{
     default_sim_callsign, default_sim_icao_address, remap_track_collisions,
     seconds_since_midnight_utc, KNOTS_TO_MPS,
 };
 use crate::shared::config::Config;
 use crate::shared::lido;
+use crate::shared::plan::FlightPlan;
 use crate::shared::publisher::Publisher;
 
-/// One replayed flight: a precomputed path plus the identity published in
+/// One replayed flight: a precomputed plan plus the identity published in
 /// its CAT062 records
 struct SimFlight {
-    path: FlightPath,
+    plan: FlightPlan,
     callsign: String,
     icao_address: String,
     /// Destination ident, for the arrival announcement
@@ -45,8 +46,8 @@ fn load_sim_flight(
     let briefing = lido::parse_briefing(&text)
         .with_context(|| format!("Failed to parse OFP briefing: {}", briefing_path))?;
     let log_ete_min = briefing.waypoints.last().and_then(|w| w.cum_time_min);
-    let path = FlightPath::from_briefing(&briefing)
-        .with_context(|| format!("Failed to build flight path: {}", briefing_path))?;
+    let plan = FlightPlan::from_briefing(&briefing)
+        .with_context(|| format!("Failed to build flight plan: {}", briefing_path))?;
 
     let sim = &config.simulation;
     let callsign = single
@@ -60,16 +61,16 @@ fn load_sim_flight(
         .or(briefing.icao_address)
         .unwrap_or_else(|| default_sim_icao_address(index));
 
-    let first = path.points().first().unwrap();
-    let last = path.points().last().unwrap();
+    let first = plan.points().first().unwrap();
+    let last = plan.points().last().unwrap();
     println!(
         "Flight {}: {} -> {} | {} waypoints, {:.0} nm, estimated {:.0} min (log ETE: {})",
         callsign,
         briefing.dep_runway.as_deref().unwrap_or(&first.ident),
         briefing.arr_runway.as_deref().unwrap_or(&last.ident),
-        path.points().len(),
-        path.total_distance_nm(),
-        path.total_duration_s() / 60.0,
+        plan.points().len(),
+        plan.total_distance_nm(),
+        plan.total_duration_s() / 60.0,
         log_ete_min.map_or("n/a".to_string(), |m| format!("{} min", m))
     );
     println!(
@@ -88,7 +89,7 @@ fn load_sim_flight(
 
     let arrival = last.ident.clone();
     Ok(SimFlight {
-        path,
+        plan,
         callsign,
         icao_address,
         arrival,
@@ -141,7 +142,7 @@ pub async fn run_replay(
         let mut records = Vec::with_capacity(flights.len());
 
         for flight in &mut flights {
-            let state = flight.path.sample(elapsed);
+            let state = sampler::sample(&flight.plan, elapsed);
 
             let mut record = Cat062Record::new(config.asterix.sac, config.asterix.sic);
             record.track_number = icao_to_track_number(&flight.icao_address);

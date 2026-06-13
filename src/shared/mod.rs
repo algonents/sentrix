@@ -10,4 +10,5 @@ pub mod cat062;
 pub mod config;
 pub mod geo;
 pub mod lido;
+pub mod plan;
 pub mod publisher;
