@@ -101,6 +101,39 @@ the replay has started.
   GS, making reported speed and positional derivative identical by
   definition, with acceleration an explicit rate limiter.
 
+## Current model: agent mode
+
+Agent mode (`cargo run -- --agent <briefing>...`) flies each brief as a
+stateful **kinematic agent** rather than replaying a timeline. It is
+independent of replay — it shares only `shared/` (plan, geo, CAT-062 helpers,
+publisher), never the replay loop.
+
+- **`agent/aircraft.rs`** — `Aircraft` holds live state (lat, lon, altitude,
+  GS, track) plus plan progress, advanced each `step(dt)`:
+
+  - **LNAV** — steer toward the active waypoint, turning at ≤3°/s; sequence on a
+    1 nm capture + overshoot guard. (Turn anticipation still pending.)
+
+  - **Ground speed** — move toward the leg's target GS at ≤0.7 kt/s.
+
+  - **VNAV (vertical)** — pace toward the active fix's planned altitude at
+    `min(required_rate, performance_limit)`, so it tracks the plan where the
+    type can and falls short honestly when the limit binds.
+
+  - **Position** — integrate forward along the current track at GS.
+
+- **`agent/performance.rs`** — a pluggable `PerformanceModel` supplying per-type
+  climb/descent rate limits. Default is a flat 2000 fpm (no data needed);
+  `--performance <dir>` loads OpenAP WRAP limits from a *user-supplied*
+  directory (GPL-3.0 data — never shipped). See Phase 2 / OpenAP Slice 1.
+
+- **`agent/run.rs`** — loads briefs, remaps 12-bit track collisions, integrates
+  ~1 s sub-steps, and publishes one CAT-062 block per `poll_interval_secs`.
+
+**Implemented:** Phase 2 core (agent + LNAV + VNAV) and OpenAP Slice 1
+(per-type vertical performance). **Pending:** turn anticipation, the
+agent-vs-replay parity test, and Slice 2 (CAS/Mach speed schedule). See Phasing.
+
 ## Direction
 
 ### Goal
