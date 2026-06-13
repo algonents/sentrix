@@ -30,13 +30,6 @@ impl Publisher {
             .send_to(data, &self.destination)
             .with_context(|| format!("Failed to send to {}", self.destination))
     }
-
-    /// Get the local address the socket is bound to
-    pub fn local_addr(&self) -> Result<std::net::SocketAddr> {
-        self.socket
-            .local_addr()
-            .context("Failed to get local address")
-    }
 }
 
 #[cfg(test)]
@@ -45,7 +38,7 @@ mod tests {
 
     #[test]
     fn test_publisher_creation() {
-        let publisher = Publisher::new("127.0.0.1:4000").unwrap();
-        assert!(publisher.local_addr().is_ok());
+        // Binding to an ephemeral local port must succeed
+        Publisher::new("127.0.0.1:4000").unwrap();
     }
 }

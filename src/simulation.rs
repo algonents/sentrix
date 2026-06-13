@@ -31,7 +31,7 @@ pub struct PathPoint {
     pub ident: String,
     pub lat: f64,
     pub lon: f64,
-    pub alt_ft: f64,
+    pub altitude_ft: f64,
     pub gs_kts: f64,
     pub tas_kts: f64,
     /// Seconds from departure
@@ -45,7 +45,7 @@ pub struct PathPoint {
 pub struct SimulatedState {
     pub lat: f64,
     pub lon: f64,
-    pub alt_ft: f64,
+    pub altitude_ft: f64,
     pub gs_kts: f64,
     pub tas_kts: f64,
     pub track_deg: f64,
@@ -118,7 +118,7 @@ impl FlightPath {
                 ident: w.ident.clone(),
                 lat: w.lat,
                 lon: w.lon,
-                alt_ft: alt[i].unwrap(),
+                altitude_ft: alt[i].unwrap(),
                 gs_kts,
                 // TAS is only printed on cruise rows in the log; elsewhere,
                 // estimate it as GS minus the wind component (GS itself as
@@ -163,7 +163,7 @@ impl FlightPath {
             return SimulatedState {
                 lat: last.lat,
                 lon: last.lon,
-                alt_ft: last.alt_ft,
+                altitude_ft: last.altitude_ft,
                 gs_kts: 0.0,
                 tas_kts: 0.0,
                 track_deg: last.track_deg,
@@ -186,7 +186,7 @@ impl FlightPath {
         SimulatedState {
             lat: lerp(a.lat, b.lat),
             lon: lerp(a.lon, b.lon),
-            alt_ft: lerp(a.alt_ft, b.alt_ft),
+            altitude_ft: lerp(a.altitude_ft, b.altitude_ft),
             gs_kts: lerp(a.gs_kts, b.gs_kts),
             tas_kts: lerp(a.tas_kts, b.tas_kts),
             track_deg: a.track_deg,
@@ -352,7 +352,7 @@ mod tests {
         let mid = path.sample(path.total_duration_s() / 2.0);
         assert!((mid.lat - 46.5).abs() < 0.01);
         assert!((mid.lon - 6.0).abs() < 1e-9);
-        assert!((mid.alt_ft - 15000.0).abs() < 100.0);
+        assert!((mid.altitude_ft - 15000.0).abs() < 100.0);
         assert!((mid.gs_kts - 360.0).abs() < 1e-9);
         assert!(mid.track_deg < 1.0 || mid.track_deg > 359.0); // due north
         assert_eq!(mid.next_ident.as_deref(), Some("B"));
@@ -386,7 +386,7 @@ mod tests {
 
         let fir = &path.points()[1];
         assert_eq!(fir.gs_kts, 400.0);
-        assert_eq!(fir.alt_ft, 10000.0);
+        assert_eq!(fir.altitude_ft, 10000.0);
         assert_eq!(fir.tas_kts, 400.0); // missing TAS falls back to GS
     }
 
@@ -413,7 +413,7 @@ mod tests {
 
         // Mid-flight the aircraft is at cruise FL300 heading roughly north-west
         let mid = path.sample(path.total_duration_s() * 0.5);
-        assert!((mid.alt_ft - 30000.0).abs() < 1.0);
+        assert!((mid.altitude_ft - 30000.0).abs() < 1.0);
         assert!((270.0..360.0).contains(&mid.track_deg));
     }
 
@@ -442,7 +442,7 @@ mod tests {
         let end_t = path.total_duration_s();
         let short_final = path.sample(end_t - 30.0);
         assert!(short_final.gs_kts < 200.0, "gs = {}", short_final.gs_kts);
-        assert!(short_final.alt_ft < 2000.0, "alt = {}", short_final.alt_ft);
+        assert!(short_final.altitude_ft < 2000.0, "alt = {}", short_final.altitude_ft);
 
         // With the profile, total duration approaches the plan's 45 min ETE
         let mins = end_t / 60.0;

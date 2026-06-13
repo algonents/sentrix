@@ -56,7 +56,7 @@ destination = "127.0.0.1:4000"
 # Optional overrides; by default identity comes from the OFP bulletin
 [simulation]
 #callsign = "SIM001"
-#icao24 = "4b1234"
+#icao_address = "4b1234"
 ```
 
 ## Usage

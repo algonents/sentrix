@@ -22,7 +22,7 @@ destination = "127.0.0.1:4000"
 
 # Simulated aircraft identity overrides (used with --simulate <OFP bulletin>).
 # When unset, the identity comes from the bulletin's ICAO flight plan:
-# callsign from item 7, icao24 from the Mode-S CODE/ item.
+# callsign from item 7, icao_address from the Mode-S CODE/ item.
 [simulation]
 #callsign = "SIM001"
-#icao24 = "4b1234"
+#icao_address = "4b1234"

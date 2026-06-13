@@ -29,13 +29,6 @@ pub struct Credentials {
 }
 
 impl Credentials {
-    pub fn new(client_id: impl Into<String>, client_secret: impl Into<String>) -> Self {
-        Self {
-            client_id: client_id.into(),
-            client_secret: client_secret.into(),
-        }
-    }
-
     /// Load credentials from environment variables OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET
     pub fn from_env() -> Option<Self> {
         let client_id = std::env::var("OPENSKY_CLIENT_ID").ok()?;
@@ -135,30 +128,11 @@ pub struct BoundingBox {
     pub max_lon: f64,
 }
 
-impl BoundingBox {
-    pub fn new(min_lat: f64, max_lat: f64, min_lon: f64, max_lon: f64) -> Self {
-        Self { min_lat, max_lat, min_lon, max_lon }
-    }
-
-    /// London/UK area
-    pub fn london() -> Self {
-        Self::new(50.0, 53.0, -2.0, 2.0)
-    }
-
-    /// Switzerland
-    pub fn switzerland() -> Self {
-        Self::new(45.8, 47.8, 5.9, 10.5)
-    }
-
-    /// UK + Switzerland (Western/Central Europe)
-    pub fn uk_switzerland() -> Self {
-        Self::new(45.8, 53.0, -2.0, 10.5)
-    }
-}
-
 /// OpenSky API response
 #[derive(Debug, Deserialize)]
 pub struct OpenSkyResponse {
+    /// Server timestamp of the snapshot; not consumed yet
+    #[allow(dead_code)]
     pub time: i64,
     pub states: Option<Vec<StateVector>>,
 }
@@ -167,12 +141,16 @@ pub struct OpenSkyResponse {
 /// Fields: https://openskynetwork.github.io/opensky-api/rest.html#all-state-vectors
 ///
 /// Deserialized from a JSON array with 17 or 18 elements (category field is optional).
+/// The trailing comment on each field is its positional index in that array and
+/// is load-bearing (see the custom `Deserialize` below) — do not reorder.
+/// Some fields are parsed but not yet consumed; they mirror the wire format.
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct StateVector {
-    pub icao24: String,              // 0
+    pub icao_address: String,        // 0 (OpenSky calls this "icao24")
     pub callsign: Option<String>,    // 1
     pub time_position: Option<i64>,  // 3
-    pub longitude: Option<f64>,      //wha 5
+    pub longitude: Option<f64>,      // 5
     pub latitude: Option<f64>,       // 6
     pub baro_altitude: Option<f64>,  // 7 (meters)
     pub on_ground: bool,             // 8
@@ -202,7 +180,7 @@ impl<'de> serde::Deserialize<'de> for StateVector {
         let bool_field = |v: &serde_json::Value| v.as_bool().unwrap_or(false);
 
         Ok(StateVector {
-            icao24: str_field(&arr[0]).unwrap_or_default(),
+            icao_address: str_field(&arr[0]).unwrap_or_default(),
             callsign: str_field(&arr[1]),
             time_position: i64_field(&arr[3]),
             longitude: f64_field(&arr[5]),
@@ -213,14 +191,14 @@ impl<'de> serde::Deserialize<'de> for StateVector {
             true_track: f64_field(&arr[10]),
             squawk: str_field(&arr[14]),
             position_source: i64_field(&arr[16]).unwrap_or(0),
-            category: arr.get(17).and_then(|v| i64_field(v)),
+            category: arr.get(17).and_then(i64_field),
         })
     }
 }
 
 impl StateVector {
-    pub fn icao24(&self) -> &str {
-        &self.icao24
+    pub fn icao_address(&self) -> &str {
+        &self.icao_address
     }
 
     pub fn time_position(&self) -> Option<i64> {
@@ -240,23 +218,18 @@ impl StateVector {
     }
 
     /// Altitude in feet (converted from meters)
-    pub fn altitude_feet(&self) -> Option<i32> {
+    pub fn altitude_ft(&self) -> Option<i32> {
         self.baro_altitude.map(|m| (m * 3.28084) as i32)
     }
 
-    /// Velocity in m/s
-    pub fn velocity_ms(&self) -> Option<f64> {
+    /// Velocity in metres per second
+    pub fn velocity_mps(&self) -> Option<f64> {
         self.velocity
     }
 
     /// True track (heading) in degrees
     pub fn true_track(&self) -> Option<f64> {
         self.true_track
-    }
-
-    /// Heading in degrees (integer)
-    pub fn heading(&self) -> Option<i32> {
-        self.true_track.map(|h| h as i32)
     }
 }
 
