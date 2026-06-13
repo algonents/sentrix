@@ -4,5 +4,5 @@
 //! paths and sample them on a tick. It has no scenario or clearance concept;
 //! those belong to the (independent) agent mode.
 
-pub mod flight_path;
 pub mod run;
+pub mod sampler;

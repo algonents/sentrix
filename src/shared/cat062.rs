@@ -6,10 +6,45 @@
 
 use anyhow::Result;
 use chrono::{Timelike, Utc};
-use libasterix::asterix::cat062::icao_to_track_number;
+use libasterix::asterix::cat062::{
+    icao_to_track_number, parse_icao_address, velocity_to_cartesian, Cat062Record,
+};
 
 /// Knots → metres per second, for encoding velocity as Cartesian vx/vy.
 pub const KNOTS_TO_MPS: f64 = 0.514444;
+
+/// Build a CAT-062 record from a simulated flight's instantaneous state.
+/// Shared by replay and the agent — both produce the same `(lat, lon, alt, gs,
+/// track, identity)` tuple, only the *source* of the state differs. (Live mode
+/// builds its own from an OpenSky `StateVector`.)
+#[allow(clippy::too_many_arguments)] // a flat record builder — grouping the fields buys nothing
+pub fn flight_record(
+    sac: u8,
+    sic: u8,
+    callsign: &str,
+    icao_address: &str,
+    lat: f64,
+    lon: f64,
+    altitude_ft: f64,
+    gs_kts: f64,
+    track_deg: f64,
+) -> Cat062Record {
+    let mut record = Cat062Record::new(sac, sic);
+    record.track_number = icao_to_track_number(icao_address);
+    record.time_of_day = seconds_since_midnight_utc();
+    record.latitude = lat;
+    record.longitude = lon;
+    record.altitude_ft = Some(altitude_ft.round() as i32);
+    let (vx, vy) = velocity_to_cartesian(gs_kts * KNOTS_TO_MPS, track_deg);
+    record.vx = Some(vx);
+    record.vy = Some(vy);
+    // Mode-S address from the FPL CODE/ item - downstream systems use this
+    // (with the callsign) for flight plan correlation.
+    record.icao_address = parse_icao_address(icao_address);
+    record.callsign = Some(callsign.to_string());
+    record.track_status = 0x00;
+    record
+}
 
 /// Base for fallback Mode-S addresses, used for simulated flights without an
 /// ICAO flight plan section (and no config overrides). Addresses are allocated

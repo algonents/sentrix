@@ -1,9 +1,10 @@
 //! Sentrix - OpenSky to ASTERIX CAT062 converter
 //!
-//! Publishes aircraft state as ASTERIX CAT062 over UDP. Two independent
-//! sources share only `shared`: **live** mode polls the OpenSky Network, and
-//! **replay** mode (`--simulate <briefing>...`) replays one or more SimBrief
-//! OFP briefings concurrently. A future **agent** mode will live alongside them.
+//! Publishes aircraft state as ASTERIX CAT062 over UDP. Independent sources
+//! share only `shared`: **live** mode polls the OpenSky Network, **replay**
+//! mode (`--simulate <brief>...`) replays SimBrief briefs as a precomputed
+//! timeline, and **agent** mode (`--agent <brief>...`) flies them as stateful
+//! kinematic agents.
 
 mod agent;
 mod live;
@@ -12,15 +13,16 @@ mod shared;
 
 use anyhow::{bail, Context, Result};
 
+use crate::agent::run::run_agent;
 use crate::live::run::run_live;
 use crate::replay::run::run_replay;
 use crate::shared::config::Config;
 use crate::shared::publisher::Publisher;
 
-/// Extract the briefing paths from a `--simulate <path>...` argument, if present
-fn parse_simulate_arg() -> Result<Option<Vec<String>>> {
+/// Extract the brief paths following `flag` (e.g. `--simulate`), if present.
+fn parse_brief_paths(flag: &str) -> Result<Option<Vec<String>>> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    match args.iter().position(|a| a == "--simulate") {
+    match args.iter().position(|a| a == flag) {
         Some(i) => {
             let paths: Vec<String> = args[i + 1..]
                 .iter()
@@ -28,7 +30,7 @@ fn parse_simulate_arg() -> Result<Option<Vec<String>>> {
                 .cloned()
                 .collect();
             if paths.is_empty() {
-                bail!("--simulate requires at least one briefing path, e.g. --simulate briefs/lsgg_lfpg.txt");
+                bail!("{flag} requires at least one brief path, e.g. {flag} briefs/lsgg_lfpg.txt");
             }
             Ok(Some(paths))
         }
@@ -41,7 +43,8 @@ async fn main() -> Result<()> {
     println!("Sentrix - OpenSky to ASTERIX CAT062 converter");
     println!("============================================");
 
-    let briefing_paths = parse_simulate_arg()?;
+    let agent_paths = parse_brief_paths("--agent")?;
+    let replay_paths = parse_brief_paths("--simulate")?;
 
     // Load configuration
     let config = Config::load().context("Failed to load configuration")?;
@@ -54,8 +57,9 @@ async fn main() -> Result<()> {
     let publisher = Publisher::new(&config.udp.destination)?;
     println!("UDP publisher ready: -> {}", config.udp.destination);
 
-    match briefing_paths {
-        Some(paths) => run_replay(&config, &paths, &publisher).await,
-        None => run_live(&config, &publisher).await,
+    match (agent_paths, replay_paths) {
+        (Some(paths), _) => run_agent(&config, &paths, &publisher).await,
+        (None, Some(paths)) => run_replay(&config, &paths, &publisher).await,
+        (None, None) => run_live(&config, &publisher).await,
     }
 }

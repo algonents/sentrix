@@ -1,6 +1,11 @@
-//! Agent mode: stateful, kinematic simulation — future home of the
-//! `Aircraft::step(dt)` engine, agent-executed scenarios, and the clearance
-//! channel. Developed independently of replay mode (see docs/SIMULATION.md);
-//! the two share only `crate::shared`, never an execution loop.
+//! Agent mode: stateful, kinematic simulation. Each aircraft integrates its
+//! own state toward per-leg targets via `Aircraft::step(dt)`, following its
+//! flight plan (LNAV). Developed independently of replay mode (see
+//! docs/SIMULATION.md); the two share only `crate::shared`, never an execution
+//! loop.
 //!
-//! Intentionally empty for now — a signpost for where the agent engine lands.
+//! Phase 2 scope: uncleared agents flying their plans. Scenarios (Phase 3) and
+//! the clearance channel (Phase 4) build on top of this.
+
+pub mod aircraft;
+pub mod run;

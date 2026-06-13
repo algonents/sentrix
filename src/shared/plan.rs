@@ -1,10 +1,13 @@
-//! Flight path replay
+//! Flight plan: the route built from a briefing.
 //!
-//! Turns the waypoint list from a SimBrief flight log into a time-indexed
-//! path and interpolates aircraft state along it.
+//! A briefing's waypoint list resolved into per-leg targets (GS, altitude),
+//! great-circle bearings, and a distance÷GS timeline. This is mode-agnostic
+//! input infrastructure: **replay** samples the plan as a function of time, the
+//! **agent** executes it via `step(dt)`. Construction lives here so both modes
+//! fly the exact same route (and the agent-vs-replay parity test is meaningful).
 //!
-//! The timeline is derived from leg distance / average ground speed rather
-//! than the log's TTLT column: TTLT is minute-resolution, so consecutive
+//! The timeline (`time_s`) is derived from leg distance / average ground speed
+//! rather than the log's TTLT column: TTLT is minute-resolution, so consecutive
 //! waypoints can share the same timestamp, which would create zero-duration
 //! segments.
 
@@ -26,7 +29,7 @@ const ARRIVAL_DECEL_DIST_NM: [f64; 3] = [15.0, 10.0, 4.0];
 
 /// A waypoint with all values resolved and a position on the timeline
 #[derive(Debug, Clone)]
-pub struct PathPoint {
+pub struct PlanPoint {
     pub ident: String,
     pub lat: f64,
     pub lon: f64,
@@ -39,28 +42,14 @@ pub struct PathPoint {
     pub track_deg: f64,
 }
 
-/// Interpolated aircraft state at a point in time
-#[derive(Debug, Clone)]
-pub struct SimulatedState {
-    pub lat: f64,
-    pub lon: f64,
-    pub altitude_ft: f64,
-    pub gs_kts: f64,
-    pub tas_kts: f64,
-    pub track_deg: f64,
-    /// Next waypoint ahead (None once the destination is reached)
-    pub next_ident: Option<String>,
-    /// True once the destination has been reached
-    pub ended: bool,
-}
-
+/// The route an aircraft flies: resolved waypoints with per-leg targets.
 #[derive(Debug)]
-pub struct FlightPath {
-    points: Vec<PathPoint>,
+pub struct FlightPlan {
+    points: Vec<PlanPoint>,
 }
 
-impl FlightPath {
-    /// Build a path from a parsed briefing, applying the takeoff/approach
+impl FlightPlan {
+    /// Build a plan from a parsed briefing, applying the takeoff/approach
     /// speed profile when the briefing provides V2/VREF. Geometry is never
     /// altered — synthetic points lie on the existing legs.
     pub fn from_briefing(briefing: &LidoBriefing) -> Result<Self> {
@@ -72,7 +61,7 @@ impl FlightPath {
 
     pub fn from_waypoints(waypoints: Vec<Waypoint>) -> Result<Self> {
         if waypoints.len() < 2 {
-            bail!("flight path needs at least 2 waypoints, got {}", waypoints.len());
+            bail!("flight plan needs at least 2 waypoints, got {}", waypoints.len());
         }
 
         let mut gs: Vec<Option<f64>> = waypoints.iter().map(|w| w.gs_kts).collect();
@@ -92,7 +81,7 @@ impl FlightPath {
         }
         fill_gaps(&mut alt);
 
-        let mut points: Vec<PathPoint> = Vec::with_capacity(waypoints.len());
+        let mut points: Vec<PlanPoint> = Vec::with_capacity(waypoints.len());
         let mut time_s = 0.0;
         for (i, w) in waypoints.iter().enumerate() {
             let gs_kts = gs[i].unwrap();
@@ -113,7 +102,7 @@ impl FlightPath {
                 points.last().map(|p| p.track_deg).unwrap_or(0.0)
             };
 
-            points.push(PathPoint {
+            points.push(PlanPoint {
                 ident: w.ident.clone(),
                 lat: w.lat,
                 lon: w.lon,
@@ -133,11 +122,11 @@ impl FlightPath {
         Ok(Self { points })
     }
 
-    pub fn points(&self) -> &[PathPoint] {
+    pub fn points(&self) -> &[PlanPoint] {
         &self.points
     }
 
-    /// Total flight duration in seconds
+    /// Total flight duration in seconds (from the distance÷GS timeline)
     pub fn total_duration_s(&self) -> f64 {
         self.points.last().map(|p| p.time_s).unwrap_or(0.0)
     }
@@ -148,50 +137,6 @@ impl FlightPath {
             .windows(2)
             .map(|w| haversine_nm(w[0].lat, w[0].lon, w[1].lat, w[1].lon))
             .sum()
-    }
-
-    /// Interpolated state at `elapsed_s` seconds after departure.
-    ///
-    /// Past the destination, returns the final position with zero speed.
-    pub fn sample(&self, elapsed_s: f64) -> SimulatedState {
-        let pts = &self.points;
-        let last = pts.last().unwrap();
-        let t = elapsed_s.max(0.0);
-
-        if t >= last.time_s {
-            return SimulatedState {
-                lat: last.lat,
-                lon: last.lon,
-                altitude_ft: last.altitude_ft,
-                gs_kts: 0.0,
-                tas_kts: 0.0,
-                track_deg: last.track_deg,
-                next_ident: None,
-                ended: true,
-            };
-        }
-
-        // Find the segment containing t (paths are ~20 points, linear is fine)
-        let mut i = 0;
-        while i + 1 < pts.len() && pts[i + 1].time_s <= t {
-            i += 1;
-        }
-        let (a, b) = (&pts[i], &pts[i + 1]);
-
-        let duration = b.time_s - a.time_s;
-        let f = if duration > 0.0 { (t - a.time_s) / duration } else { 1.0 };
-        let lerp = |x: f64, y: f64| x + (y - x) * f;
-
-        SimulatedState {
-            lat: lerp(a.lat, b.lat),
-            lon: lerp(a.lon, b.lon),
-            altitude_ft: lerp(a.altitude_ft, b.altitude_ft),
-            gs_kts: lerp(a.gs_kts, b.gs_kts),
-            tas_kts: lerp(a.tas_kts, b.tas_kts),
-            track_deg: a.track_deg,
-            next_ident: Some(b.ident.clone()),
-            ended: false,
-        }
     }
 }
 
@@ -297,7 +242,7 @@ fn fill_gaps(values: &mut [Option<f64>]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::lido::{parse_briefing, parse_flight_log};
+    use crate::shared::lido::parse_flight_log;
 
     fn wp(
         ident: &str,
@@ -320,117 +265,42 @@ mod tests {
     }
 
     #[test]
-    fn test_straight_leg_interpolation() {
-        // 60 nm due north at a constant 360 kt -> 600 s
-        let path = FlightPath::from_waypoints(vec![
-            wp("A", 46.0, 6.0, Some(10000.0), Some(400.0), Some(360.0)),
-            wp("B", 47.0, 6.0, Some(20000.0), Some(400.0), Some(360.0)),
-        ])
-        .unwrap();
-
-        assert!((path.total_duration_s() - 600.0).abs() < 5.0);
-
-        let mid = path.sample(path.total_duration_s() / 2.0);
-        assert!((mid.lat - 46.5).abs() < 0.01);
-        assert!((mid.lon - 6.0).abs() < 1e-9);
-        assert!((mid.altitude_ft - 15000.0).abs() < 100.0);
-        assert!((mid.gs_kts - 360.0).abs() < 1e-9);
-        assert!(mid.track_deg < 1.0 || mid.track_deg > 359.0); // due north
-        assert_eq!(mid.next_ident.as_deref(), Some("B"));
-        assert!(!mid.ended);
-    }
-
-    #[test]
-    fn test_holds_last_position_after_arrival() {
-        let path = FlightPath::from_waypoints(vec![
-            wp("A", 46.0, 6.0, Some(5000.0), None, Some(300.0)),
-            wp("B", 46.5, 6.0, Some(0.0), None, Some(300.0)),
-        ])
-        .unwrap();
-
-        let end = path.sample(path.total_duration_s() + 100.0);
-        assert!(end.ended);
-        assert_eq!(end.gs_kts, 0.0);
-        assert!((end.lat - 46.5).abs() < 1e-9);
-        assert_eq!(end.next_ident, None);
-    }
-
-    #[test]
     fn test_fills_missing_values() {
         // Middle waypoint (e.g. a FIR boundary) has no altitude/speeds
-        let path = FlightPath::from_waypoints(vec![
+        let plan = FlightPlan::from_waypoints(vec![
             wp("A", 46.0, 6.0, Some(10000.0), Some(420.0), Some(400.0)),
             wp("FIR", 46.5, 6.0, None, None, None),
             wp("B", 47.0, 6.0, Some(10000.0), Some(420.0), Some(400.0)),
         ])
         .unwrap();
 
-        let fir = &path.points()[1];
+        let fir = &plan.points()[1];
         assert_eq!(fir.gs_kts, 400.0);
         assert_eq!(fir.altitude_ft, 10000.0);
         assert_eq!(fir.tas_kts, 400.0); // missing TAS falls back to GS
     }
 
     #[test]
-    fn test_real_flight_log() {
-        let wps = parse_flight_log(include_str!("../../briefs/lsgg_lfpg.txt")).unwrap();
-        let path = FlightPath::from_waypoints(wps).unwrap();
-
-        // Log says 238 nm and 45 min block-to-block; distance/GS timing
-        // should land in the same ballpark.
-        assert!((path.total_distance_nm() - 238.0).abs() < 10.0);
-        let mins = path.total_duration_s() / 60.0;
-        assert!((30.0..60.0).contains(&mins), "unexpected duration: {mins} min");
-
-        // Starts at LSGG, ends at LFPG
-        let start = path.sample(0.0);
-        assert!((start.lat - 46.2383).abs() < 0.01);
-        assert!((start.lon - 6.11).abs() < 0.01);
-
-        let end = path.sample(path.total_duration_s());
-        assert!(end.ended);
-        assert!((end.lat - 49.01).abs() < 0.01);
-        assert!((end.lon - 2.5483).abs() < 0.01);
-
-        // Mid-flight the aircraft is at cruise FL300 heading roughly north-west
-        let mid = path.sample(path.total_duration_s() * 0.5);
-        assert!((mid.altitude_ft - 30000.0).abs() < 1.0);
-        assert!((270.0..360.0).contains(&mid.track_deg));
-    }
-
-    #[test]
     fn test_tas_estimated_from_wind_component() {
         let mut a = wp("A", 46.0, 6.0, Some(17600.0), None, Some(365.0));
         a.wind_comp_kts = Some(-38.0); // 38 kt headwind -> TAS = GS + 38
-        let path = FlightPath::from_waypoints(vec![
+        let plan = FlightPlan::from_waypoints(vec![
             a,
             wp("B", 47.0, 6.0, Some(17600.0), None, Some(365.0)),
         ])
         .unwrap();
-        assert_eq!(path.points()[0].tas_kts, 403.0);
+        assert_eq!(plan.points()[0].tas_kts, 403.0);
     }
 
     #[test]
-    fn test_briefing_speed_profile() {
-        let b = parse_briefing(include_str!("../../briefs/lsgg_lfpg.txt")).unwrap();
-        let path = FlightPath::from_briefing(&b).unwrap();
+    fn test_real_brief_geometry() {
+        let wps = parse_flight_log(include_str!("../../briefs/lsgg_lfpg.txt")).unwrap();
+        let plan = FlightPlan::from_waypoints(wps).unwrap();
 
-        // Departure: lifts off at V2, not at the first waypoint's climb GS
-        let start = path.sample(0.0);
-        assert!((start.gs_kts - 154.0).abs() < 1.0, "gs = {}", start.gs_kts);
-
-        // Short final: below 200 kt and on the glide, decelerating to VREF
-        let end_t = path.total_duration_s();
-        let short_final = path.sample(end_t - 30.0);
-        assert!(short_final.gs_kts < 200.0, "gs = {}", short_final.gs_kts);
-        assert!(short_final.altitude_ft < 2000.0, "alt = {}", short_final.altitude_ft);
-
-        // With the profile, total duration approaches the plan's 45 min ETE
-        let mins = end_t / 60.0;
-        assert!((40.0..50.0).contains(&mins), "duration: {mins} min");
-
-        // Without V2/VREF the path is unchanged (and faster)
-        let plain = FlightPath::from_waypoints(b.waypoints.clone()).unwrap();
-        assert!(plain.total_duration_s() < end_t);
+        // Log says 238 nm and 45 min block-to-block; distance/GS timing
+        // should land in the same ballpark.
+        assert!((plan.total_distance_nm() - 238.0).abs() < 10.0);
+        let mins = plan.total_duration_s() / 60.0;
+        assert!((30.0..60.0).contains(&mins), "unexpected duration: {mins} min");
     }
 }

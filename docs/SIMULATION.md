@@ -27,14 +27,17 @@ the replay has started.
    flight-log-only extract parses with all optionals `None`. Waypoint blocks
    are located by their LAT/LON column patterns (fixed-width slices — column
    positions are load-bearing).
+
 2. `FlightPath::from_briefing` (`replay/flight_path.rs`) builds the timeline:
    - V2/VREF profile points are synthesized onto the first and last legs:
      lift off at V2 and accelerate towards 250 kt; decelerate through
      ~250/200 kt stages down to VREF on final, with altitude capped to a
      ~3° glide near the runway. Path geometry is never altered — synthetic
      points lie on the existing legs.
+
    - Missing GS/altitude values are forward/back-filled from neighbours;
      the endpoint airports (no FL in the log) are treated as 0 ft.
+
    - A single pass accumulates time: each leg's duration = haversine
      distance ÷ average of the two endpoint ground speeds. This is
      deliberately **not** the briefing's TTLT column, which is
@@ -46,14 +49,17 @@ the replay has started.
 
 3. The loop captures `Instant::now()` at start; each tick calls
    `path.sample(start.elapsed())`.
+
 4. `sample` finds the segment containing that elapsed time and linearly
    interpolates lat, lon, altitude, GS and TAS between the segment's
    endpoints. Track is held constant per segment — the aircraft flies
    straight lines between fixes and snaps to a new heading at each one.
+
 5. The state is converted to a `Cat062Record` (track number hashed from the
    icao_address, GS+track converted to Cartesian vx/vy, callsign and Mode-S
    address attached), encoded with `encode_cat062_block`, and sent as one
    UDP datagram. One record, one block, one datagram per tick.
+
 6. Past the last point, `sample` returns the destination with zero speed and
    `ended = true`; the loop publishes that frozen position indefinitely.
 
@@ -64,14 +70,18 @@ the replay has started.
   what makes it a replay, and why a mid-flight clearance is impossible in
   this model: there is no current state to act on, only a lookup into a
   fixed table.
+
 - **Real time only.** Wall-clock drives the sample; a 45-minute flight takes
   45 minutes. No acceleration or jump-to-time yet (cheap to add — see
   Phase 1).
+
 - **One aircraft.** One path, one identity, one record per datagram.
+
 - **Minimal CAT-062 records.** Only position, altitude, vx/vy, callsign,
   track number and time-of-day are populated; `track_status` is hardwired
   to `0x00`. No ROCD (I062/220), no mode-of-flight, no coasting/terminated
   flags.
+
 - **Acceleration is implicit and slightly inconsistent.** On a segment whose
   endpoint speeds differ (e.g. 150→250 kt), three mechanisms disagree:
   the leg *duration* uses the average speed (correct for uniform
@@ -126,13 +136,17 @@ Variations preserve realism — they set each agent's **initial intent** at
 spawn, never invent geometry:
 
 - **Identity** — callsign / icao_address / registration per instance.
+
 - **Start offset** — staggered departures; a flight can also spawn already en
   route by initialising the agent partway along its plan.
+
 - **Speed scaling** — a different initial target speed (in replay terms, the
   en-route GS the agent aims for). V2/VREF stay untouched, so takeoff and
   landing speeds remain honest while the en-route portion scales.
+
 - **Cruise level shift** — a different initial cleared FL for the cruise plateau
   (±1000/2000 ft).
+
 - **Lateral offset** — a small parallel-route offset (SLOP-like, 1–2 nm).
 
 Out of scope by decision: reversing routes, splicing templates, waypoint
@@ -161,6 +175,7 @@ Caveats:
 - `icao_to_track_number` hashes icao_address to 12 bits; scenario load must detect
   track-number collisions and reject or remap — two flights sharing a track
   number would corrupt downstream tracker tests.
+
 - Two instances of the same template share the exact lateral path: an
   overtake without `cruise_shift_ft` or a lateral offset is a scripted
   collision. Sometimes that is the intent — it just has to be a knob, not an
@@ -175,8 +190,10 @@ generation a solver problem, not a simulation problem:
 
 - *"Where/when does separation between these two flights drop below 5 nm?"*
   — walk both trajectories, report closest approach. No run needed.
+
 - *"Make the overtake happen at waypoint PAS"* — solve for the start offset
   that co-locates both aircraft at PAS.
+
 - *"Crossing conflict at fix X at the same FL, 600 s into the scenario"* —
   solve each flight's offset so both reach X at t=600; an initial cleared-FL
   shift puts them at the same level.
@@ -198,6 +215,7 @@ longer predetermined and the same questions get much harder. Solver outputs
   authored it too replays bit-identically, because open-loop execution is
   deterministic. Live OpenSky data can never do this, and even the agent model
   loses determinism once interactive clearances enter.
+
 - Pure replay already exercises density/clutter (label anti-overlap, track
   tables, render performance at 50–200 targets from real OFPs) and full
   climb/descent profiles; *constructed* edge cases (crossings, convergence)
@@ -211,13 +229,16 @@ freeze):
    elapsed clock in the loop. Multiplies the value of everything else
    (debugging an event 25 min into a scenario must not cost 25 min per
    iteration). **This is Phase 1** (see Phasing).
+
 2. **CAT-062 field audit** — whatever fields the consumer renders beyond our
    minimal set go untested (ROCD, mode-of-flight, coasting flags). Audit the
    consumer's reads against our writes. Remember the libasterix gap:
    `icao_address` never reaches the wire (see CLAUDE.md).
+
 3. **Track lifecycle** — by decision, an arrived flight just holds its last
    (ground) position indefinitely; no track-termination or coast handling is
    added (not worth the complexity for a visualization feed).
+
 4. **Heading snaps at waypoints** — instantaneous track changes make speed
    vectors jump. Cosmetic; fixed for free by the agent's turn dynamics, not
    worth fixing in replay.
@@ -244,8 +265,11 @@ mass/thrust/drag, no BADA (deliberately rejected as over-complicated for
 cruise flight):
 
 - position integrates along the current track at GS
+
 - altitude moves toward the cleared level at a capped rate (~1,500–2,500 fpm)
+
 - track turns toward the target at standard rate (3°/s)
+
 - GS moves toward the target speed at ~0.5–1 kt/s
 
 The subtle parts are LNAV (waypoint sequencing and turn anticipation so the
@@ -296,8 +320,10 @@ after the agent lands (this amends the original agent-phase plan, which deleted
 - Replay is the **deterministic gold standard**: identical output every run,
   a property agent mode cannot fully promise once interactive clearances
   exist. Visualization regression testing keeps relying on it.
+
 - Permanent parity checking: any future agent change can be validated
   against replay on the same plan, not just once during migration.
+
 - Cost is near zero precisely because of the `sample(t)` feature freeze —
   replay stays ~50 frozen lines.
 
@@ -330,10 +356,13 @@ Ordering follows two principles — do what is *unblocked* first, and add
 
 - **Time control (Phase 1)** needs only the current replay loop and multiplies
   the value of every later phase, so it comes first.
+
 - **The agent (Phase 2)** is the structural change everything situational
   depends on, so it precedes scenarios.
+
 - **Scenarios (Phase 3)** feed many agents a *given* situation they execute
   open-loop — no intervention, so it reproduces identically every run.
+
 - **The clearance channel (Phase 4)** adds the feedback loop that perturbs a
   *running* scenario. It is the only phase that introduces non-determinism, so
   it lands last.
@@ -347,6 +376,7 @@ controller story becomes the priority.
 - [x] Multi-flight loop: a `Vec` of (path, identity) instances, sample each per
   tick, batch all records into **one** `encode_cat062_block` per tick
   (`--simulate <briefing>...`).
+
 - [x] `icao_address` → 12-bit track-number collision detection at load (reject
   or remap).
 
@@ -356,6 +386,7 @@ controller story becomes the priority.
   elapsed clock by `tick × factor` instead of real seconds, so a 45-min flight
   replays in 4.5 min at `--speed 10`. Default `1.0` is today's real-time
   behaviour; live mode ignores it (OpenSky is inherently real-time).
+
 - [ ] `--start-at <hms|secs>` jump-to-time: seed the elapsed clock with a
   **global** offset so the replay opens at, e.g., t=25 min — debug a late event
   without waiting (or scrubbing) to it. One clock for the whole replay, not
@@ -366,18 +397,59 @@ Notes (not tasks):
 - Both flags are loop-level (scale/offset the elapsed clock fed to `sample`);
   they touch neither `sample(t)` nor the agent migration, so they carry over
   verbatim once execution becomes agent-based.
+
 - Granularity caveat: the publish tick stays `poll_interval_secs`, so at high
   `--speed` successive published positions are far apart (≈7 NM at jet speed for
   a 5 s tick × 10). Fine for visualization; drop `poll_interval_secs` if a
   smoother track is wanted.
+
 - Track lifecycle stays minimal by decision: an arrived flight holds its last
   (ground) position indefinitely — no track-termination or coast handling.
 
 #### Phase 2 — Kinematic agent (the structural change; up to a week)
 
-- [ ] `Aircraft` with state (lat, lon, `altitude_ft`, `gs_kts`, `track_deg`) +
-  intent (cleared FL, LNAV-route-or-assigned-heading, target speed) + `step(dt)`
-  with the four rate limiters.
+- [x] `Aircraft` with state (lat, lon, `altitude_ft`, `gs_kts`, `track_deg`) +
+  `step(dt)` with the four rate limiters (3°/s turn, 2000 fpm, 0.7 kt/s, position
+  integration). *Intent is plan-derived for now — targets come from the active
+  leg; explicit clearance intent (cleared FL / assigned heading) arrives in
+  Phase 4.*
+
+- [x] LNAV — active-waypoint steering + sequencing (capture radius + overshoot
+  guard). *First cut sequences on a fixed 1 nm capture.*
+
+- [x] `FlightPlan` (shared) is the plan; the agent derives per-leg targets (GS,
+  altitude, aim point) from the active waypoint. Built in M0 so replay and the
+  agent fly the same plan.
+
+- [x] Tick-rate detail: at 3°/s a 5 s publish tick is a 15° heading jump —
+  integrate internally at ~1 s sub-steps, publish every `poll_interval_secs`.
+
+- [ ] **Turn anticipation** (essential, currently stubbed): replace the fixed
+  1 nm capture with a computed turn lead, `lead = (GS / turn_rate)·tan(Δtrack/2)`,
+  so the turn begins at the geometrically correct point and rolls out on the next
+  leg. The fixed capture only looks OK at climb speed (~1 nm lead); at cruise
+  (450 kt) the correct lead is ~3–5 nm, so it overshoots every turn and
+  S-wiggles back onto the leg. Observed turning ~1 nm before the fix.
+
+- [ ] **Regression test**: an uncleared agent flying its plan matches replay
+  output within tolerance. Replay is **not** deleted afterwards — it remains a
+  permanent coexisting mode (see "Mode coexistence" above); the parity test
+  becomes a standing check rather than a one-off migration gate. *(Partial: a
+  full-route arrival test exists — the agent flies LSGG→LFPG and arrives near the
+  threshold — but the point-by-point agent-vs-replay comparison is not written.)*
+
+- [ ] LNAV: rejoin-route after a heading vector (needs the `Heading` intent —
+  lands with the clearance channel, Phase 4).
+
+- [ ] *Improvement (low CWP impact, deferred):* speed/altitude **constraint
+  scheduling**. Each leg's target GS/altitude is currently chased at a constant
+  rate (0.7 kt/s, 2000 fpm) starting when the leg becomes active — i.e. *at* the
+  fix. A real FMS schedules the change early so it crosses the fix already at the
+  constraint speed/level. This only shifts the *timing/location* of value
+  changes, which a CWP doesn't surface (unlike turn anticipation, whose lateral
+  overshoot is directly visible on the scope). Skip unless conflict-prediction
+  (MTCD) fidelity is wanted.
+
 - [ ] Optional fidelity upgrade: source the rate limits per aircraft type from
   **OpenAP/WRAP** (TU Delft, LGPL-3.0, https://github.com/TUDelft-CNS-ATM/openap)
   instead of hardcoded constants. WRAP is a purely kinematic model (speed,
@@ -390,14 +462,6 @@ Notes (not tasks):
   maneuver realistic. Related prior art: **BlueSky** (same TU Delft group), an
   open ATM simulator whose command stack (ALT/HDG/SPD/DCT) closely matches our
   clearance-channel protocol — a good reference for clearance semantics and LNAV.
-- [ ] LNAV: waypoint sequencing, turn anticipation, rejoin-route after vector.
-- [ ] `FlightPath` becomes the plan; targets derived from it per phase.
-- [ ] **Regression test**: an uncleared agent flying its plan matches replay
-  output within tolerance. Replay is **not** deleted afterwards — it remains a
-  permanent coexisting mode (see "Mode coexistence" above); the parity test
-  becomes a standing check rather than a one-off migration gate.
-- [ ] Tick-rate detail: at 3°/s a 5 s publish tick is a 15° heading jump —
-  integrate internally at ~1 s sub-steps, publish every `poll_interval_secs`.
 
 #### Phase 3 — Scenarios: agents execute a given situation (open-loop; days)
 
@@ -405,23 +469,28 @@ Notes (not tasks):
   OFP `template` + identity + **initial intent** (start offset, initial cleared
   FL, initial target speed, route/lateral offset). The agents execute it
   autonomously — no clearances — so a scenario reproduces identically every run.
+
 - [ ] Variations expressed as agent **intent** at spawn, not timeline
   transforms: cruise-level shift → initial cleared FL, speed scaling → initial
   target speed, lateral offset → parallel-route offset. Geometry is never
   invented (no route synthesis).
+
 - [ ] Conflict authoring + solver: an uncleared agent's trajectory is still
   determined by its plan before anything runs (effectively closed-form), so
   criteria-based generation stays a *solver* problem — closest-approach report
   between two flights, and offset solving (co-locate at a fix / at a time:
   overtake at PAS, crossing at X at t=600).
+
 - [ ] `icao_address` collision remap (shipped) applies at scenario load.
 
 #### Phase 4 — Clearance channel: close the loop (days)
 
 - [ ] `tokio::select!` over the tick timer + a command source (UDP or TCP lines).
+
 - [ ] Text protocol: `<CALLSIGN> CFL <fl> | HDG <deg> | DCT <wpt> | SPD <kts>`,
   with simple ack/error replies. Each clearance writes a target into the
   addressed agent's intent, perturbing the running scenario.
+
 - [ ] Completes the controller-in-the-loop story: Phase 3 authors the conflict →
   agents fly it open-loop → CWP displays it → controller sends `SWR22B SPD 250`
   → the agent's intent updates and the situation resolves. A clearance addressed
@@ -431,33 +500,42 @@ Notes (not tasks):
 
 - 2026-06-12 — No own flight-profile engine; SimBrief OFPs remain the source
   of route geometry and nominal profiles (used as templates).
+
 - 2026-06-12 — Physics stays GS-based kinematics; BADA-style point-mass
   models rejected.
+
 - 2026-06-12 — Variations never invent route geometry (only identity, speed,
   level, lateral offset). *Updated 2026-06-13:* expressed as each agent's
   **initial intent** at spawn, not as replay profile-column transforms, since
   scenarios are agent-era.
+
 - 2026-06-12 — `sample(t)`-based features are frozen: the agent model
   retires interpolation as the execution model. Loop-level
   features (time control, command channel) are exempt — they carry over.
+
 - 2026-06-12 — Rejected: faking clearances in replay by rebuilding the
   remaining timeline from the current position (collapses for heading
   vectors; duplicates the intent model badly).
+
 - 2026-06-12 — Criteria-based scenario generation is a solver problem
   (closest-approach, offset solving) that exploits closed-form trajectories.
   *Updated 2026-06-13:* the solver is part of Phase 3 (agent-era); its
   tractability comes from scenarios being **open-loop** (uncleared agents are
   deterministic) and ends once clearances perturb a running scenario.
+
 - 2026-06-12 — `speed_factor` scales en-route speed only; V2/VREF (takeoff/
   landing) are never scaled, so those stay honest. *Updated 2026-06-13:* in the
   agent era this is an initial target-speed setting, not a GS-column transform.
+
 - 2026-06-12 — Migration write-off is bounded to `FlightPath::sample()`
   (~50 lines); everything else (parser, plan construction, output path,
   scenario layer) carries over to the agent model.
+
 - 2026-06-13 — FIR/UIR boundary rows (`-`-prefixed idents) are skipped by
   the parser: they are airspace annotations with unreliable printed
   coordinates (can fold the path back on itself, observed as a course
   deviation blip on LSGG→LSZH).
+
 - 2026-06-13 — **Mode coexistence**: replay and agent execution coexist
   permanently, selectable per flight; mixed scenarios (replayed background
   traffic + agent-mode controlled aircraft) are a supported configuration.
@@ -465,19 +543,23 @@ Notes (not tasks):
   the migration write-off drops to zero and the parity test becomes a
   standing check. Clearances addressed to replay-mode flights are rejected
   explicitly.
+
 - 2026-06-13 — **Time control is its own phase (Phase 1)**: a `--speed`
   time-scale multiplier + a global `--start-at` jump-to-time, both CLI flags,
   default `--speed 1.0`. Loop-level (scale/offset the elapsed clock, not
   `sample(t)`), so it carries over to the agent model. Excludes pause/step.
+
 - 2026-06-13 — **Scenarios removed from replay.** Replay is a bounded,
   deterministic playback engine — concurrent multi-briefing replay (shipped) +
   time control (Phase 1), nothing more. All situation authoring (templates,
   variations, solver, conflicts) is agent-era (Phase 3), because a conflict is
   only meaningful once something can *act* on it.
+
 - 2026-06-13 — **Open-loop before closed-loop.** Phase order: time control (1)
   → kinematic agent (2) → scenarios the agents execute autonomously (3,
   deterministic) → clearance channel (4, the feedback loop that perturbs a
   running scenario). Non-determinism lands last.
+
 - 2026-06-13 — **No track termination.** An arrived flight holds its last
   (ground) position indefinitely; no coast/drop handling — unnecessary
   complexity for a visualization feed.
