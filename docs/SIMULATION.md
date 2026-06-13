@@ -441,15 +441,6 @@ Notes (not tasks):
 - [ ] LNAV: rejoin-route after a heading vector (needs the `Heading` intent —
   lands with the clearance channel, Phase 4).
 
-- [ ] *Improvement (low CWP impact, deferred):* speed/altitude **constraint
-  scheduling**. Each leg's target GS/altitude is currently chased at a constant
-  rate (0.7 kt/s, 2000 fpm) starting when the leg becomes active — i.e. *at* the
-  fix. A real FMS schedules the change early so it crosses the fix already at the
-  constraint speed/level. This only shifts the *timing/location* of value
-  changes, which a CWP doesn't surface (unlike turn anticipation, whose lateral
-  overshoot is directly visible on the scope). Skip unless conflict-prediction
-  (MTCD) fidelity is wanted.
-
 The agent reads its rate limits and target speeds through a **pluggable
 performance provider** (a trait), so the numbers can come from anywhere. sentrix
 ships only the *code* — the trait, a built-in default, and a loader for the
@@ -463,14 +454,16 @@ enum — not a transliteration); the Python in `kinematic.py` / `aero.py` is the
 behavioural reference to match and **test against**, never transcribed.
 (Reference checkout: `~/Repos/openap`.)
 
-- [ ] **OpenAP Slice 1 — per-type vertical rates (ROC/ROD).** Drive the
-  climb/descent rate cap from the provider instead of the flat 2000 fpm; fixes
-  the climb lag (A320 ≈ 2478 fpm low → ≈ 1039 fpm near cruise; see the DJL
-  crossing). m/s→fpm, no airspeed math. Steps:
+- [ ] **OpenAP Slice 1 — vertical performance (VNAV + per-type ROC/ROD).** Pace
+  the climb/descent to **meet each fix's planned altitude** (constraint-meeting),
+  **bounded by the type's real performance** from WRAP. When the plan asks for
+  more than the type can do, the cap binds and the agent **falls short honestly**
+  — physically grounded, not faked. Subsumes the old "constraint scheduling"
+  deferral (its altitude half). Steps:
 
   - [ ] Define a `PerformanceModel` trait (in `agent/performance.rs`) the agent
-    consults for climb/descent rate by aircraft type + altitude, with a
-    **default** impl = today's constants (used when no file is loaded).
+    consults for the climb/descent rate **limit** by aircraft type + altitude,
+    with a **default** impl = today's constants (used when no file is loaded).
 
   - [ ] **OpenAP WRAP loader** — reimplements `openap/kinematic.py::WRAP`. Parse
     a *user-supplied* fixed-width `data/wrap/<type>.txt` and expose the vertical
@@ -481,16 +474,18 @@ behavioural reference to match and **test against**, never transcribed.
     briefing type by lower-casing + the `_synonym.csv` fallback (as
     `WRAP.__init__`). Not shipped — read from a user-set path.
 
-  - [ ] In `step(dt)`, select the climb/descent phase by altitude vs the
-    crossover altitudes and use that rate as the vertical-rate cap (fall back to
-    the default for unknown type / no file).
+  - [ ] In `step(dt)`, compute the required rate to reach the active leg's target
+    altitude — `required = (target_alt − alt) / (dist_to_fix / gs)` — and climb/
+    descend at `min(required, wrap_limit(type, alt))`. Falls back to the default
+    limit for unknown type / no file.
 
   - [ ] Validate against the reference: a unit test asserting our parsed values +
-    phase selection equal `openap.WRAP('A320')` (e.g. `climb_vs_concas()` →
+    band selection equal `openap.WRAP('A320')` (e.g. `climb_vs_concas()` →
     `cl_vs_avg_cas_const`); capture a few numbers from the Python as fixtures.
 
-  - [ ] Verify at the DJL crossing with a WRAP file loaded: the agent reaches the
-    planned FL at the fix.
+  - [ ] Verify at the DJL crossing with a WRAP file loaded: the agent tracks the
+    planned FL where the type can, and falls short **only** when the rate limit
+    binds.
 
 - [ ] **OpenAP Slice 2 — speed schedule (CAS/Mach → GS).** Extend the provider
   with per-type climb/cruise/descent CAS & Mach (+ cruise ceiling), so maneuvers
