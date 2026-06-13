@@ -347,6 +347,7 @@ controller story becomes the priority.
 - [x] Multi-flight loop: a `Vec` of (path, identity) instances, sample each per
   tick, batch all records into **one** `encode_cat062_block` per tick
   (`--simulate <briefing>...`).
+
 - [x] `icao_address` → 12-bit track-number collision detection at load (reject
   or remap).
 
@@ -356,6 +357,7 @@ controller story becomes the priority.
   elapsed clock by `tick × factor` instead of real seconds, so a 45-min flight
   replays in 4.5 min at `--speed 10`. Default `1.0` is today's real-time
   behaviour; live mode ignores it (OpenSky is inherently real-time).
+
 - [ ] `--start-at <hms|secs>` jump-to-time: seed the elapsed clock with a
   **global** offset so the replay opens at, e.g., t=25 min — debug a late event
   without waiting (or scrubbing) to it. One clock for the whole replay, not
@@ -436,23 +438,28 @@ Notes (not tasks):
   OFP `template` + identity + **initial intent** (start offset, initial cleared
   FL, initial target speed, route/lateral offset). The agents execute it
   autonomously — no clearances — so a scenario reproduces identically every run.
+
 - [ ] Variations expressed as agent **intent** at spawn, not timeline
   transforms: cruise-level shift → initial cleared FL, speed scaling → initial
   target speed, lateral offset → parallel-route offset. Geometry is never
   invented (no route synthesis).
+
 - [ ] Conflict authoring + solver: an uncleared agent's trajectory is still
   determined by its plan before anything runs (effectively closed-form), so
   criteria-based generation stays a *solver* problem — closest-approach report
   between two flights, and offset solving (co-locate at a fix / at a time:
   overtake at PAS, crossing at X at t=600).
+
 - [ ] `icao_address` collision remap (shipped) applies at scenario load.
 
 #### Phase 4 — Clearance channel: close the loop (days)
 
 - [ ] `tokio::select!` over the tick timer + a command source (UDP or TCP lines).
+
 - [ ] Text protocol: `<CALLSIGN> CFL <fl> | HDG <deg> | DCT <wpt> | SPD <kts>`,
   with simple ack/error replies. Each clearance writes a target into the
   addressed agent's intent, perturbing the running scenario.
+
 - [ ] Completes the controller-in-the-loop story: Phase 3 authors the conflict →
   agents fly it open-loop → CWP displays it → controller sends `SWR22B SPD 250`
   → the agent's intent updates and the situation resolves. A clearance addressed
