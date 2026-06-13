@@ -55,9 +55,9 @@ pub struct SimulationConfig {
     /// Callsign published in the CAT062 target identification
     #[serde(default)]
     pub callsign: Option<String>,
-    /// 24-bit ICAO address as a hex string (also seeds the track number)
+    /// 24-bit Mode-S address as a hex string (also seeds the track number)
     #[serde(default)]
-    pub icao24: Option<String>,
+    pub icao_address: Option<String>,
 }
 
 fn default_poll_interval() -> u64 {
@@ -111,7 +111,7 @@ destination = "127.0.0.1:4000"
         assert_eq!(config.udp.destination, "127.0.0.1:4000");
         // [simulation] section is optional; unset values defer to the bulletin
         assert_eq!(config.simulation.callsign, None);
-        assert_eq!(config.simulation.icao24, None);
+        assert_eq!(config.simulation.icao_address, None);
     }
 
     #[test]
@@ -132,11 +132,11 @@ destination = "127.0.0.1:4000"
 
 [simulation]
 callsign = "SWR123"
-icao24 = "4b17e5"
+icao_address = "4b17e5"
 "#;
 
         let config: Config = toml::from_str(toml).unwrap();
         assert_eq!(config.simulation.callsign.as_deref(), Some("SWR123"));
-        assert_eq!(config.simulation.icao24.as_deref(), Some("4b17e5"));
+        assert_eq!(config.simulation.icao_address.as_deref(), Some("4b17e5"));
     }
 }

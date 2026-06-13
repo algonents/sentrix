@@ -51,7 +51,7 @@ the replay has started.
    endpoints. Track is held constant per segment — the aircraft flies
    straight lines between fixes and snaps to a new heading at each one.
 5. The state is converted to a `Cat062Record` (track number hashed from the
-   icao24, GS+track converted to Cartesian vx/vy, callsign and Mode-S
+   icao_address, GS+track converted to Cartesian vx/vy, callsign and Mode-S
    address attached), encoded with `encode_cat062_block`, and sent as one
    UDP datagram. One record, one block, one datagram per tick.
 6. Past the last point, `sample` returns the destination with zero speed and
@@ -115,7 +115,7 @@ variations.
 Variations that preserve realism (they transform profile columns, never
 invent geometry):
 
-- **Identity** — callsign / icao24 / registration per instance.
+- **Identity** — callsign / icao_address / registration per instance.
 - **Start offset** — staggered departures; negative offsets spawn a flight
   already en route via `sample(offset + elapsed)`.
 - **Speed scaling** — scale the GS/TAS columns by a factor; the timeline
@@ -137,12 +137,12 @@ A scenario is a config file listing template instances, roughly:
 [[flight]]
 template = "simulations/lsgg_lfpg.txt"
 callsign = "SWR11A"
-icao24 = "4b17e1"
+icao_address = "4b17e1"
 
 [[flight]]
 template = "simulations/lsgg_lfpg.txt"
 callsign = "SWR22B"
-icao24 = "4b17e2"
+icao_address = "4b17e2"
 start_offset_s = 300     # departs 5 min behind...
 speed_factor = 1.20      # ...20% faster GS: catches up on SWR11A
 cruise_shift_ft = 1000   # offset level, else the overtake is a collision
@@ -150,7 +150,7 @@ cruise_shift_ft = 1000   # offset level, else the overtake is a collision
 
 Caveats:
 
-- `icao_to_track_number` hashes icao24 to 12 bits; scenario load must detect
+- `icao_to_track_number` hashes icao_address to 12 bits; scenario load must detect
   track-number collisions and reject or remap — two flights sharing a track
   number would corrupt downstream tracker tests.
 - Two instances of the same template share the exact lateral path: an
@@ -316,7 +316,7 @@ phasing minimizes rework but is not sacred.
 #### Phase 1 — Multi-flight scenario player (replay-based; days)
 
 - [ ] Scenario TOML (`--scenario <file>`, keeping `--simulate <bulletin>` as the
-  single-flight shortcut): per-flight `template`, `callsign`, `icao24`,
+  single-flight shortcut): per-flight `template`, `callsign`, `icao_address`,
   `start_offset_s`, `speed_factor`, `cruise_shift_ft`, `lateral_offset_nm`.
 - [ ] Variations implemented as transforms on the waypoint columns before
   `FlightPath` construction; `speed_factor` applied before V2/VREF synthesis.
@@ -324,7 +324,7 @@ phasing minimizes rework but is not sacred.
   each per tick, batch all records into **one** `encode_cat062_block` per
   tick (live mode already proves multi-record blocks downstream).
   *(via `--simulate <path>...`; the `offset` field awaits the scenario TOML.)*
-- [x] icao24 → 12-bit track-number collision detection at scenario load
+- [x] icao_address → 12-bit track-number collision detection at scenario load
   (reject or remap).
 - [ ] For visualization debugging, include: time control (scale + start offset),
   terminate-after-arrival option, and the CAT-062 field audit against the

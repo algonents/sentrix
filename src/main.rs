@@ -1,7 +1,7 @@
 //! Sentrix - OpenSky to ASTERIX CAT062 converter
 //!
 //! Fetches aircraft data from OpenSky Network and publishes it as ASTERIX CAT062 over UDP.
-//! With `--simulate <flight log>...`, replays one or more SimBrief flight logs
+//! With `--simulate <bulletin>...`, replays one or more SimBrief OFP bulletins
 //! concurrently instead of live data.
 
 mod config;
@@ -22,12 +22,12 @@ use crate::opensky::{fetch_states, Credentials, StateVector, TokenManager};
 use crate::publisher::Publisher;
 use crate::simulation::FlightPath;
 
-const KNOTS_TO_MS: f64 = 0.514444;
+const KNOTS_TO_MPS: f64 = 0.514444;
 
 /// Base for fallback Mode-S addresses, used for bulletins without an ICAO
 /// flight plan section (and no [simulation] config overrides). Addresses are
 /// allocated sequentially per flight index so concurrent flights stay unique.
-const DEFAULT_SIM_ICAO24_BASE: u32 = 0x4b1234;
+const DEFAULT_SIM_ICAO_ADDRESS_BASE: u32 = 0x4b1234;
 
 /// Fallback callsign for the flight at `index`: SIM001, SIM002, ...
 fn default_sim_callsign(index: usize) -> String {
@@ -35,8 +35,8 @@ fn default_sim_callsign(index: usize) -> String {
 }
 
 /// Fallback Mode-S address for the flight at `index`
-fn default_sim_icao24(index: usize) -> String {
-    format!("{:06x}", DEFAULT_SIM_ICAO24_BASE + index as u32)
+fn default_sim_icao_address(index: usize) -> String {
+    format!("{:06x}", DEFAULT_SIM_ICAO_ADDRESS_BASE + index as u32)
 }
 
 /// Current time as seconds since midnight UTC (CAT062 I062/070 convention)
@@ -54,7 +54,7 @@ fn state_to_cat062(state: &StateVector, sac: u8, sic: u8) -> Option<Cat062Record
     let mut record = Cat062Record::new(sac, sic);
 
     // Track number from ICAO address (hashed to 12-bit)
-    record.track_number = icao_to_track_number(state.icao24());
+    record.track_number = icao_to_track_number(state.icao_address());
 
     // Time of day (seconds since midnight UTC)
     record.time_of_day = if let Some(tp) = state.time_position() {
@@ -69,17 +69,17 @@ fn state_to_cat062(state: &StateVector, sac: u8, sic: u8) -> Option<Cat062Record
     record.longitude = lon;
 
     // Altitude
-    record.altitude_ft = state.altitude_feet();
+    record.altitude_ft = state.altitude_ft();
 
     // Velocity (convert polar to cartesian if available)
-    if let (Some(speed), Some(heading)) = (state.velocity_ms(), state.true_track()) {
+    if let (Some(speed), Some(heading)) = (state.velocity_mps(), state.true_track()) {
         let (vx, vy) = velocity_to_cartesian(speed, heading);
         record.vx = Some(vx);
         record.vy = Some(vy);
     }
 
     // Target identification
-    record.icao_address = parse_icao_address(state.icao24());
+    record.icao_address = parse_icao_address(state.icao_address());
     record.callsign = state.callsign().map(|s| s.to_string());
 
     // Track status (basic: confirmed track)
@@ -88,7 +88,7 @@ fn state_to_cat062(state: &StateVector, sac: u8, sic: u8) -> Option<Cat062Record
     Some(record)
 }
 
-/// Extract the flight log paths from a `--simulate <path>...` argument, if present
+/// Extract the bulletin paths from a `--simulate <path>...` argument, if present
 fn parse_simulate_arg() -> Result<Option<Vec<String>>> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.iter().position(|a| a == "--simulate") {
@@ -99,7 +99,7 @@ fn parse_simulate_arg() -> Result<Option<Vec<String>>> {
                 .cloned()
                 .collect();
             if paths.is_empty() {
-                bail!("--simulate requires at least one flight log path, e.g. --simulate simulations/lsgg_lfpg.txt");
+                bail!("--simulate requires at least one bulletin path, e.g. --simulate simulations/lsgg_lfpg.txt");
             }
             Ok(Some(paths))
         }
@@ -112,7 +112,7 @@ async fn main() -> Result<()> {
     println!("Sentrix - OpenSky to ASTERIX CAT062 converter");
     println!("============================================");
 
-    let sim_log = parse_simulate_arg()?;
+    let bulletin_paths = parse_simulate_arg()?;
 
     // Load configuration
     let config = Config::load().context("Failed to load configuration")?;
@@ -125,7 +125,7 @@ async fn main() -> Result<()> {
     let publisher = Publisher::new(&config.udp.destination)?;
     println!("UDP publisher ready: -> {}", config.udp.destination);
 
-    match sim_log {
+    match bulletin_paths {
         Some(paths) => run_simulation(&config, &paths, &publisher).await,
         None => run_live(&config, &publisher).await,
     }
@@ -215,7 +215,7 @@ async fn run_live(config: &Config, publisher: &Publisher) -> Result<()> {
 struct SimFlight {
     path: FlightPath,
     callsign: String,
-    icao24: String,
+    icao_address: String,
     /// Destination ident, for the arrival announcement
     arrival: String,
     holding_announced: bool,
@@ -227,13 +227,13 @@ struct SimFlight {
 /// so collisions are the common case, not the exception; colliding flights
 /// after the first are remapped onto the fallback address range.
 ///
-/// Returns `(flight index, replacement icao24)` per collision.
-fn remap_track_collisions(icao24s: &[&str]) -> Result<Vec<(usize, String)>> {
-    let mut used: Vec<u16> = Vec::with_capacity(icao24s.len());
+/// Returns `(flight index, replacement icao_address)` per collision.
+fn remap_track_collisions(icao_addresses: &[&str]) -> Result<Vec<(usize, String)>> {
+    let mut used: Vec<u16> = Vec::with_capacity(icao_addresses.len());
     let mut remaps = Vec::new();
     let mut next_fallback = 0usize;
 
-    for (i, addr) in icao24s.iter().enumerate() {
+    for (i, addr) in icao_addresses.iter().enumerate() {
         let mut track = icao_to_track_number(addr);
         if used.contains(&track) {
             loop {
@@ -244,7 +244,7 @@ fn remap_track_collisions(icao24s: &[&str]) -> Result<Vec<(usize, String)>> {
                     "no free 12-bit track numbers left for {}",
                     addr
                 );
-                let candidate = default_sim_icao24(next_fallback);
+                let candidate = default_sim_icao_address(next_fallback);
                 next_fallback += 1;
                 track = icao_to_track_number(&candidate);
                 if !used.contains(&track) {
@@ -264,17 +264,17 @@ fn remap_track_collisions(icao24s: &[&str]) -> Result<Vec<(usize, String)>> {
 /// (FPL callsign / Mode-S CODE) -> per-index fallback.
 fn load_sim_flight(
     config: &Config,
-    log_path: &str,
+    bulletin_path: &str,
     index: usize,
     single: bool,
 ) -> Result<SimFlight> {
-    let text = std::fs::read_to_string(log_path)
-        .with_context(|| format!("Failed to read flight log: {}", log_path))?;
+    let text = std::fs::read_to_string(bulletin_path)
+        .with_context(|| format!("Failed to read bulletin: {}", bulletin_path))?;
     let bulletin = lido::parse_bulletin(&text)
-        .with_context(|| format!("Failed to parse OFP bulletin: {}", log_path))?;
+        .with_context(|| format!("Failed to parse OFP bulletin: {}", bulletin_path))?;
     let log_ete_min = bulletin.waypoints.last().and_then(|w| w.cum_time_min);
     let path = FlightPath::from_bulletin(&bulletin)
-        .with_context(|| format!("Failed to build flight path: {}", log_path))?;
+        .with_context(|| format!("Failed to build flight path: {}", bulletin_path))?;
 
     let sim = &config.simulation;
     let callsign = single
@@ -282,11 +282,11 @@ fn load_sim_flight(
         .flatten()
         .or(bulletin.callsign)
         .unwrap_or_else(|| default_sim_callsign(index));
-    let icao24 = single
-        .then(|| sim.icao24.clone())
+    let icao_address = single
+        .then(|| sim.icao_address.clone())
         .flatten()
-        .or(bulletin.mode_s_code)
-        .unwrap_or_else(|| default_sim_icao24(index));
+        .or(bulletin.icao_address)
+        .unwrap_or_else(|| default_sim_icao_address(index));
 
     let first = path.points().first().unwrap();
     let last = path.points().last().unwrap();
@@ -305,7 +305,7 @@ fn load_sim_flight(
         callsign,
         bulletin.aircraft_type.as_deref().unwrap_or("type n/a"),
         bulletin.registration.as_deref().unwrap_or("reg n/a"),
-        icao24
+        icao_address
     );
     match (bulletin.v2_kts, bulletin.vref_kts) {
         (Some(v2), Some(vref)) => {
@@ -318,7 +318,7 @@ fn load_sim_flight(
     Ok(SimFlight {
         path,
         callsign,
-        icao24,
+        icao_address,
         arrival,
         holding_announced: false,
     })
@@ -327,28 +327,28 @@ fn load_sim_flight(
 /// Simulation mode: replay one or more SimBrief LIDO OFP bulletins as CAT062.
 /// All flights share one timeline and their records are batched into a single
 /// CAT062 block per tick.
-async fn run_simulation(config: &Config, log_paths: &[String], publisher: &Publisher) -> Result<()> {
-    let single = log_paths.len() == 1;
+async fn run_simulation(config: &Config, bulletin_paths: &[String], publisher: &Publisher) -> Result<()> {
+    let single = bulletin_paths.len() == 1;
     let sim = &config.simulation;
-    if !single && (sim.callsign.is_some() || sim.icao24.is_some()) {
+    if !single && (sim.callsign.is_some() || sim.icao_address.is_some()) {
         eprintln!(
-            "Warning: [simulation] identity overrides apply to single-flight mode only - ignored for {} flight logs",
-            log_paths.len()
+            "Warning: [simulation] identity overrides apply to single-flight mode only - ignored for {} bulletins",
+            bulletin_paths.len()
         );
     }
 
-    let mut flights = Vec::with_capacity(log_paths.len());
-    for (i, log_path) in log_paths.iter().enumerate() {
-        flights.push(load_sim_flight(config, log_path, i, single)?);
+    let mut flights = Vec::with_capacity(bulletin_paths.len());
+    for (i, bulletin_path) in bulletin_paths.iter().enumerate() {
+        flights.push(load_sim_flight(config, bulletin_path, i, single)?);
     }
 
-    let addresses: Vec<&str> = flights.iter().map(|f| f.icao24.as_str()).collect();
+    let addresses: Vec<&str> = flights.iter().map(|f| f.icao_address.as_str()).collect();
     for (i, replacement) in remap_track_collisions(&addresses)? {
         eprintln!(
             "Warning: {} icao24 {} shares a 12-bit track number with an earlier flight - using {} instead",
-            flights[i].callsign, flights[i].icao24, replacement
+            flights[i].callsign, flights[i].icao_address, replacement
         );
-        flights[i].icao24 = replacement;
+        flights[i].icao_address = replacement;
     }
 
     println!(
@@ -368,17 +368,17 @@ async fn run_simulation(config: &Config, log_paths: &[String], publisher: &Publi
             let state = flight.path.sample(elapsed);
 
             let mut record = Cat062Record::new(config.asterix.sac, config.asterix.sic);
-            record.track_number = icao_to_track_number(&flight.icao24);
+            record.track_number = icao_to_track_number(&flight.icao_address);
             record.time_of_day = seconds_since_midnight_utc();
             record.latitude = state.lat;
             record.longitude = state.lon;
-            record.altitude_ft = Some(state.alt_ft.round() as i32);
-            let (vx, vy) = velocity_to_cartesian(state.gs_kts * KNOTS_TO_MS, state.track_deg);
+            record.altitude_ft = Some(state.altitude_ft.round() as i32);
+            let (vx, vy) = velocity_to_cartesian(state.gs_kts * KNOTS_TO_MPS, state.track_deg);
             record.vx = Some(vx);
             record.vy = Some(vy);
             // Mode-S address from the FPL CODE/ item - downstream systems use this
             // (with the callsign) for flight plan correlation
-            record.icao_address = parse_icao_address(&flight.icao24);
+            record.icao_address = parse_icao_address(&flight.icao_address);
             record.callsign = Some(flight.callsign.clone());
             record.track_status = 0x00;
             records.push(record);
@@ -400,7 +400,7 @@ async fn run_simulation(config: &Config, log_paths: &[String], publisher: &Publi
                     flight.callsign,
                     state.lat,
                     state.lon,
-                    state.alt_ft,
+                    state.altitude_ft,
                     state.gs_kts,
                     state.tas_kts,
                     state.track_deg,
@@ -426,8 +426,8 @@ mod tests {
     fn test_default_sim_identity_is_sequential() {
         assert_eq!(default_sim_callsign(0), "SIM001");
         assert_eq!(default_sim_callsign(1), "SIM002");
-        assert_eq!(default_sim_icao24(0), "4b1234");
-        assert_eq!(default_sim_icao24(1), "4b1235");
+        assert_eq!(default_sim_icao_address(0), "4b1234");
+        assert_eq!(default_sim_icao_address(1), "4b1235");
     }
 
     #[test]

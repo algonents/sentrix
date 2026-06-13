@@ -34,9 +34,9 @@ pub struct LidoBulletin {
     pub registration: Option<String>,
     /// Aircraft type (FPL item 9, e.g. "A320")
     pub aircraft_type: Option<String>,
-    /// Mode-S address as hex (FPL item 18, CODE/) — transmitted in I062/245
-    /// for track correlation
-    pub mode_s_code: Option<String>,
+    /// 24-bit Mode-S address as hex (FPL item 18, CODE/) — transmitted in
+    /// I062/245 for track correlation
+    pub icao_address: Option<String>,
     /// Departure airport/runway from the ROUTING line, e.g. "LSGG/22"
     pub dep_runway: Option<String>,
     /// Arrival airport/runway, e.g. "LFPG/27R"
@@ -101,7 +101,7 @@ pub fn parse_bulletin(text: &str) -> Result<LidoBulletin> {
         callsign: parse_fpl_callsign(&lines),
         registration: parse_fpl_token(&lines, "REG/"),
         aircraft_type: parse_fpl_aircraft_type(&lines),
-        mode_s_code: parse_fpl_token(&lines, "CODE/"),
+        icao_address: parse_fpl_token(&lines, "CODE/"),
         dep_runway,
         arr_runway,
         v2_kts: parse_v2(&lines),
@@ -562,7 +562,7 @@ PAS        E00600.0 0002 ...   6   232  276          436  ....  ....
         assert_eq!(b.callsign.as_deref(), Some("ALU"));
         assert_eq!(b.registration.as_deref(), Some("N320SB"));
         assert_eq!(b.aircraft_type.as_deref(), Some("A320"));
-        assert_eq!(b.mode_s_code.as_deref(), Some("1349"));
+        assert_eq!(b.icao_address.as_deref(), Some("1349"));
         assert_eq!(b.dep_runway.as_deref(), Some("LSGG/22"));
         assert_eq!(b.arr_runway.as_deref(), Some("LFPG/27R"));
 
@@ -604,7 +604,7 @@ PAS        E00600.0 0002 ...   6   232  276          436  ....  ....
         assert_eq!(b.callsign, None);
         assert_eq!(b.registration, None);
         assert_eq!(b.aircraft_type, None);
-        assert_eq!(b.mode_s_code, None);
+        assert_eq!(b.icao_address, None);
         assert_eq!(b.dep_runway, None);
         assert_eq!(b.arr_runway, None);
         assert_eq!(b.v2_kts, None);
