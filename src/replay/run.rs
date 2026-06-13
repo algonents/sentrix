@@ -5,15 +5,11 @@
 
 use anyhow::{Context, Result};
 use chrono::Utc;
-use libasterix::asterix::cat062::{
-    encode_cat062_block, icao_to_track_number, parse_icao_address, velocity_to_cartesian,
-    Cat062Record,
-};
+use libasterix::asterix::cat062::encode_cat062_block;
 
 use crate::replay::sampler;
 use crate::shared::cat062::{
-    default_sim_callsign, default_sim_icao_address, remap_track_collisions,
-    seconds_since_midnight_utc, KNOTS_TO_MPS,
+    default_sim_callsign, default_sim_icao_address, flight_record, remap_track_collisions,
 };
 use crate::shared::config::Config;
 use crate::shared::lido;
@@ -144,21 +140,17 @@ pub async fn run_replay(
         for flight in &mut flights {
             let state = sampler::sample(&flight.plan, elapsed);
 
-            let mut record = Cat062Record::new(config.asterix.sac, config.asterix.sic);
-            record.track_number = icao_to_track_number(&flight.icao_address);
-            record.time_of_day = seconds_since_midnight_utc();
-            record.latitude = state.lat;
-            record.longitude = state.lon;
-            record.altitude_ft = Some(state.altitude_ft.round() as i32);
-            let (vx, vy) = velocity_to_cartesian(state.gs_kts * KNOTS_TO_MPS, state.track_deg);
-            record.vx = Some(vx);
-            record.vy = Some(vy);
-            // Mode-S address from the FPL CODE/ item - downstream systems use this
-            // (with the callsign) for flight plan correlation
-            record.icao_address = parse_icao_address(&flight.icao_address);
-            record.callsign = Some(flight.callsign.clone());
-            record.track_status = 0x00;
-            records.push(record);
+            records.push(flight_record(
+                config.asterix.sac,
+                config.asterix.sic,
+                &flight.callsign,
+                &flight.icao_address,
+                state.lat,
+                state.lon,
+                state.altitude_ft,
+                state.gs_kts,
+                state.track_deg,
+            ));
 
             if state.ended {
                 if !flight.holding_announced {
