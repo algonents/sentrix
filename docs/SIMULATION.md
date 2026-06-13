@@ -375,9 +375,13 @@ Notes (not tasks):
 
 #### Phase 2 — Kinematic agent (the structural change; up to a week)
 
-- [ ] `Aircraft` with state (lat, lon, `altitude_ft`, `gs_kts`, `track_deg`) +
-  intent (cleared FL, LNAV-route-or-assigned-heading, target speed) + `step(dt)`
-  with the four rate limiters.
+- [x] `Aircraft` with state (lat, lon, `altitude_ft`, `gs_kts`, `track_deg`) +
+  `step(dt)` with the four rate limiters (3°/s turn, 2000 fpm, 0.7 kt/s, position
+  integration). *Intent is plan-derived for now — targets come from the active
+  leg; explicit clearance intent (cleared FL / assigned heading) arrives in
+  Phase 4.*
+- [x] LNAV — active-waypoint steering + sequencing (capture radius + overshoot
+  guard). *First cut sequences on a fixed 1 nm capture.*
 - [ ] *Improvement (low CWP impact, deferred):* speed/altitude **constraint
   scheduling**. Each leg's target GS/altitude is currently chased at a constant
   rate (0.7 kt/s, 2000 fpm) starting when the leg becomes active — i.e. *at* the
@@ -398,8 +402,6 @@ Notes (not tasks):
   maneuver realistic. Related prior art: **BlueSky** (same TU Delft group), an
   open ATM simulator whose command stack (ALT/HDG/SPD/DCT) closely matches our
   clearance-channel protocol — a good reference for clearance semantics and LNAV.
-- [x] LNAV — active-waypoint steering + sequencing (capture radius + overshoot
-  guard). *First cut sequences on a fixed 1 nm capture.*
 - [ ] **Turn anticipation** (essential, currently stubbed): replace the fixed
   1 nm capture with a computed turn lead, `lead = (GS / turn_rate)·tan(Δtrack/2)`,
   so the turn begins at the geometrically correct point and rolls out on the next
@@ -408,12 +410,16 @@ Notes (not tasks):
   S-wiggles back onto the leg. Observed turning ~1 nm before the fix.
 - [ ] LNAV: rejoin-route after a heading vector (needs the `Heading` intent —
   lands with the clearance channel, Phase 4).
-- [ ] `FlightPath` becomes the plan; targets derived from it per phase.
+- [x] `FlightPlan` (shared) is the plan; the agent derives per-leg targets (GS,
+  altitude, aim point) from the active waypoint. Built in M0 so replay and the
+  agent fly the same plan.
 - [ ] **Regression test**: an uncleared agent flying its plan matches replay
   output within tolerance. Replay is **not** deleted afterwards — it remains a
   permanent coexisting mode (see "Mode coexistence" above); the parity test
-  becomes a standing check rather than a one-off migration gate.
-- [ ] Tick-rate detail: at 3°/s a 5 s publish tick is a 15° heading jump —
+  becomes a standing check rather than a one-off migration gate. *(Partial: a
+  full-route arrival test exists — the agent flies LSGG→LFPG and arrives near the
+  threshold — but the point-by-point agent-vs-replay comparison is not written.)*
+- [x] Tick-rate detail: at 3°/s a 5 s publish tick is a 15° heading jump —
   integrate internally at ~1 s sub-steps, publish every `poll_interval_secs`.
 
 #### Phase 3 — Scenarios: agents execute a given situation (open-loop; days)
