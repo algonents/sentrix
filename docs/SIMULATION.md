@@ -6,7 +6,7 @@ through which a controller submits clearances), the migration analysis showing
 what survives each step, and the phased plan. It is the context-recovery
 artifact for this effort: when returning to the problem, read this first.
 
-Last updated: 2026-06-12.
+Last updated: 2026-06-13.
 
 ## Current model: timeline replay
 
@@ -258,15 +258,15 @@ netcat, a controller working position — can act as the controller.
 
 ### Migration durability: what survives, what is replaced
 
-The total planned write-off across all phases is **one function**:
-`FlightPath::sample()` (~50 lines), replaced by the agent's `step(dt)`.
-Layer by layer:
+The total planned write-off across all phases is **zero** (originally
+bounded to `FlightPath::sample()`, ~50 lines, until the coexistence
+decision below retained it as a permanent mode). Layer by layer:
 
 | Layer | Contents | Fate in agent migration |
 |---|---|---|
 | Input | `lido.rs` (~600 lines, fixed-width parsing — the most fragile/expensive code in the repo) | Untouched; agents need flight plans |
 | Plan | `FlightPath` construction: gap-filling, V2/VREF synthesis, distance÷GS timeline, bearings | Survives with a role change: from *answer* ("where am I at t") to *intent* (route + GS/alt targets). `time_s` stays useful for the solver and ETAs |
-| Execution | `FlightPath::sample()` interpolation | **Replaced** by `Aircraft::step(dt)` |
+| Execution | `FlightPath::sample()` interpolation | Joined by `Aircraft::step(dt)` as a second, coexisting mode (see below); replay stays frozen |
 | Output | `Cat062Record` conversion, `encode_cat062_block`, `publisher.rs` | Untouched; indifferent to interpolation vs integration |
 | Scenario | TOML config, variations, multi-flight loop, solver | Untouched; describes initial conditions + flight plans, exactly what agents consume. Loop changes one call: `path.sample(t)` → `aircraft.step(dt)` |
 | Loop extras | Time control, command channel, track lifecycle | Loop-level; carry over |
@@ -274,6 +274,37 @@ Layer by layer:
 The discipline that keeps this true: **no new features inside `sample(t)`**.
 New capability attaches to the plan, the scenario, the loop, or the output —
 never to the interpolation.
+
+### Mode coexistence (decided 2026-06-13)
+
+Replay and agent execution **coexist permanently**; replay is not retired
+after the agent lands (this amends the original phase 3 plan, which deleted
+`sample()` after the parity test). Rationale:
+
+- Replay is the **deterministic gold standard**: identical output every run,
+  a property agent mode cannot fully promise once interactive clearances
+  exist. Visualization regression testing keeps relying on it.
+- Permanent parity checking: any future agent change can be validated
+  against replay on the same plan, not just once during migration.
+- Cost is near zero precisely because of the `sample(t)` feature freeze —
+  replay stays ~50 frozen lines.
+
+Shape: both modes consume the same plan (`FlightPath`) and emit the same
+per-tick state, so the loop needs one seam:
+
+```rust
+enum FlightSim {
+    Replay(FlightPath),   // state = path.sample(elapsed)
+    Agent(Aircraft),      // state = aircraft.step(dt)
+}
+```
+
+Mode is selected per flight (scenario config field; CLI default), which
+enables **mixed scenarios** — e.g. 20 replayed flights as deterministic
+background traffic plus one agent-mode aircraft under control: the natural
+controller-in-the-loop demo. Boundary semantics: a clearance addressed to a
+replay-mode flight is rejected with an explicit error, never silently
+ignored.
 
 ### Phasing
 
@@ -329,7 +360,12 @@ phasing minimizes rework but is not sacred.
 - LNAV: waypoint sequencing, turn anticipation, rejoin-route after vector.
 - `FlightPath` becomes the plan; targets derived from it per phase.
 - **Regression test**: uncleared agent flying its plan matches replay output
-  within tolerance. Only after that passes is `sample()` deleted.
+  within tolerance. Replay is **not** deleted afterwards — it remains a
+  permanent coexisting mode (see "Mode coexistence" above); the parity test
+  becomes a standing check rather than a one-off migration gate.
+- Tick-rate detail: at 3°/s a 5 s publish tick is a 15° heading jump —
+  integrate internally at ~1 s sub-steps, publish every
+  `poll_interval_secs`.
 
 #### Phase 4 — Clearance channel (days)
 
@@ -363,3 +399,14 @@ phasing minimizes rework but is not sacred.
 - 2026-06-12 — Migration write-off is bounded to `FlightPath::sample()`
   (~50 lines); everything else (parser, plan construction, output path,
   scenario layer) carries over to the agent model.
+- 2026-06-13 — FIR/UIR boundary rows (`-`-prefixed idents) are skipped by
+  the parser: they are airspace annotations with unreliable printed
+  coordinates (can fold the path back on itself, observed as a course
+  deviation blip on LSGG→LSZH).
+- 2026-06-13 — **Mode coexistence**: replay and agent execution coexist
+  permanently, selectable per flight; mixed scenarios (replayed background
+  traffic + agent-mode controlled aircraft) are a supported configuration.
+  Amends the 2026-06-12 phase 3 plan to delete `sample()` after parity —
+  the migration write-off drops to zero and the parity test becomes a
+  standing check. Clearances addressed to replay-mode flights are rejected
+  explicitly.
