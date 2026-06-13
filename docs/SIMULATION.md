@@ -390,7 +390,16 @@ Notes (not tasks):
   maneuver realistic. Related prior art: **BlueSky** (same TU Delft group), an
   open ATM simulator whose command stack (ALT/HDG/SPD/DCT) closely matches our
   clearance-channel protocol — a good reference for clearance semantics and LNAV.
-- [ ] LNAV: waypoint sequencing, turn anticipation, rejoin-route after vector.
+- [x] LNAV — active-waypoint steering + sequencing (capture radius + overshoot
+  guard). *First cut sequences on a fixed 1 nm capture.*
+- [ ] **Turn anticipation** (essential, currently stubbed): replace the fixed
+  1 nm capture with a computed turn lead, `lead = (GS / turn_rate)·tan(Δtrack/2)`,
+  so the turn begins at the geometrically correct point and rolls out on the next
+  leg. The fixed capture only looks OK at climb speed (~1 nm lead); at cruise
+  (450 kt) the correct lead is ~3–5 nm, so it overshoots every turn and
+  S-wiggles back onto the leg. Observed turning ~1 nm before the fix.
+- [ ] LNAV: rejoin-route after a heading vector (needs the `Heading` intent —
+  lands with the clearance channel, Phase 4).
 - [ ] `FlightPath` becomes the plan; targets derived from it per phase.
 - [ ] **Regression test**: an uncleared agent flying its plan matches replay
   output within tolerance. Replay is **not** deleted afterwards — it remains a
