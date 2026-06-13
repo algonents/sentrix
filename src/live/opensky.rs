@@ -10,6 +10,8 @@ use serde::Deserialize;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+use crate::shared::config::BoundingBox;
+
 const OPENSKY_API_URL: &str = "https://opensky-network.org/api/states/all";
 const OPENSKY_TOKEN_URL: &str = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token";
 
@@ -117,15 +119,6 @@ impl TokenManager {
 
         Ok(access_token)
     }
-}
-
-/// Bounding box for geographic filtering
-#[derive(Debug, Clone, Deserialize)]
-pub struct BoundingBox {
-    pub min_lat: f64,
-    pub max_lat: f64,
-    pub min_lon: f64,
-    pub max_lon: f64,
 }
 
 /// OpenSky API response
