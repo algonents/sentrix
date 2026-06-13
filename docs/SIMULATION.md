@@ -454,18 +454,18 @@ enum — not a transliteration); the Python in `kinematic.py` / `aero.py` is the
 behavioural reference to match and **test against**, never transcribed.
 (Reference checkout: `~/Repos/openap`.)
 
-- [ ] **OpenAP Slice 1 — vertical performance (VNAV + per-type ROC/ROD).** Pace
+- [x] **OpenAP Slice 1 — vertical performance (VNAV + per-type ROC/ROD).** Pace
   the climb/descent to **meet each fix's planned altitude** (constraint-meeting),
   **bounded by the type's real performance** from WRAP. When the plan asks for
   more than the type can do, the cap binds and the agent **falls short honestly**
   — physically grounded, not faked. Subsumes the old "constraint scheduling"
   deferral (its altitude half). Steps:
 
-  - [ ] Define a `PerformanceModel` trait (in `agent/performance.rs`) the agent
+  - [x] Define a `PerformanceModel` trait (in `agent/performance.rs`) the agent
     consults for the climb/descent rate **limit** by aircraft type + altitude,
     with a **default** impl = today's constants (used when no file is loaded).
 
-  - [ ] **OpenAP WRAP loader** — reimplements `openap/kinematic.py::WRAP`. Parse
+  - [x] **OpenAP WRAP loader** — reimplements `openap/kinematic.py::WRAP`. Parse
     a *user-supplied* fixed-width `data/wrap/<type>.txt` and expose the vertical
     rates `ic_vs_avg`, `cl_vs_avg_{pre_cas,cas_const,mach_const}`,
     `de_vs_avg_{mach_const,cas_const,after_cas}` + crossover altitudes
@@ -474,16 +474,16 @@ behavioural reference to match and **test against**, never transcribed.
     briefing type by lower-casing + the `_synonym.csv` fallback (as
     `WRAP.__init__`). Not shipped — read from a user-set path.
 
-  - [ ] In `step(dt)`, compute the required rate to reach the active leg's target
+  - [x] In `step(dt)`, compute the required rate to reach the active leg's target
     altitude — `required = (target_alt − alt) / (dist_to_fix / gs)` — and climb/
     descend at `min(required, wrap_limit(type, alt))`. Falls back to the default
     limit for unknown type / no file.
 
-  - [ ] Validate against the reference: a unit test asserting our parsed values +
+  - [x] Validate against the reference: a unit test asserting our parsed values +
     band selection equal `openap.WRAP('A320')` (e.g. `climb_vs_concas()` →
     `cl_vs_avg_cas_const`); capture a few numbers from the Python as fixtures.
 
-  - [ ] Verify at the DJL crossing with a WRAP file loaded: the agent tracks the
+  - [x] Verify at the DJL crossing with a WRAP file loaded: the agent tracks the
     planned FL where the type can, and falls short **only** when the rate limit
     binds.
 
