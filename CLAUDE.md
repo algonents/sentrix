@@ -6,8 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 cargo run                    # Live mode (reads conf/sentrix.toml + conf/credentials.json)
-cargo run -- --simulate simulations/lsgg_lfpg.txt  # Simulation mode (no credentials needed)
-cargo run -- --simulate simulations/lsgg_lfpg.txt simulations/lsgg_lszh.txt  # Multiple concurrent flights
+cargo run -- --simulate briefs/lsgg_lfpg.txt  # Simulation mode (no credentials needed)
+cargo run -- --simulate briefs/lsgg_lfpg.txt briefs/lsgg_lszh.txt  # Multiple concurrent flights
 cargo build --release        # Optimized build
 cargo test                   # Run all tests
 cargo test test_parse_config # Run a single test by name

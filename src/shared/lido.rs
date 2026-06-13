@@ -1,6 +1,6 @@
 //! SimBrief LIDO operational flight plan (OFP) bulletin parser
 //!
-//! Parses the LIDO-layout OFP that SimBrief generates (see `simulations/*.txt`).
+//! Parses the LIDO-layout OFP that SimBrief generates (see `briefs/*.txt`).
 //! The FLIGHT LOG section is mandatory; every other section (ICAO flight plan,
 //! routing, runway analysis, wind information) is optional, so a flight-log-only
 //! extract still parses — missing sections simply yield `None` / empty values.
@@ -484,7 +484,7 @@ fn parse_hhmm(s: &str) -> Option<u32> {
 mod tests {
     use super::*;
 
-    const BULLETIN: &str = include_str!("../../simulations/lsgg_lfpg.txt");
+    const BULLETIN: &str = include_str!("../../briefs/lsgg_lfpg.txt");
 
     /// A flight-log-only extract (no FPL, runway analysis or wind sections)
     const EXTRACT: &str = "\

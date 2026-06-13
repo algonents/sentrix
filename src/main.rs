@@ -28,7 +28,7 @@ fn parse_simulate_arg() -> Result<Option<Vec<String>>> {
                 .cloned()
                 .collect();
             if paths.is_empty() {
-                bail!("--simulate requires at least one bulletin path, e.g. --simulate simulations/lsgg_lfpg.txt");
+                bail!("--simulate requires at least one bulletin path, e.g. --simulate briefs/lsgg_lfpg.txt");
             }
             Ok(Some(paths))
         }

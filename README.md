@@ -83,8 +83,8 @@ UDP publisher ready: -> 127.0.0.1:4000
 Instead of live OpenSky data, Sentrix can replay one or more [SimBrief](https://www.simbrief.com/) LIDO-layout OFP bulletins, publishing the simulated aircraft as CAT-062 in real time:
 
 ```bash
-cargo run -- --simulate simulations/lsgg_lfpg.txt
-cargo run -- --simulate simulations/lsgg_lfpg.txt simulations/lsgg_lszh.txt  # concurrent flights
+cargo run -- --simulate briefs/lsgg_lfpg.txt
+cargo run -- --simulate briefs/lsgg_lfpg.txt briefs/lsgg_lszh.txt  # concurrent flights
 ```
 
 No OpenSky credentials are needed in this mode. Sentrix parses the FLIGHT LOG waypoints (position, flight level, TAS, GS), builds a timeline from leg distance and ground speed, and interpolates position, altitude and speeds between waypoints on every tick (`poll_interval_secs`). All flights depart together at startup; each tick publishes one record per flight, batched into a single CAT-062 block. On arrival, an aircraft holds its final position with zero velocity.

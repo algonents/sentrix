@@ -19,7 +19,7 @@ the replay has started.
 
 ### Startup (once)
 
-1. `run_simulation` (`main.rs`) reads the SimBrief LIDO OFP bulletin and
+1. `run_replay` (`replay/run.rs`) reads the SimBrief LIDO OFP bulletin and
    parses it with `lido::parse_bulletin` into a `LidoBulletin`: the waypoint
    list from the FLIGHT LOG section (ident, lat/lon, FL, TAS, GS, wind
    component per row) plus optionals — callsign, Mode-S code, runways,
@@ -27,7 +27,7 @@ the replay has started.
    flight-log-only extract parses with all optionals `None`. Waypoint blocks
    are located by their LAT/LON column patterns (fixed-width slices — column
    positions are load-bearing).
-2. `FlightPath::from_bulletin` (`simulation.rs`) builds the timeline:
+2. `FlightPath::from_bulletin` (`replay/flight_path.rs`) builds the timeline:
    - V2/VREF profile points are synthesized onto the first and last legs:
      lift off at V2 and accelerate towards 250 kt; decelerate through
      ~250/200 kt stages down to VREF on final, with altitude capped to a
@@ -143,12 +143,12 @@ A scenario is a config file listing template instances, roughly:
 
 ```toml
 [[flight]]
-template = "simulations/lsgg_lfpg.txt"
+template = "briefs/lsgg_lfpg.txt"
 callsign = "SWR11A"
 icao_address = "4b17e1"
 
 [[flight]]
-template = "simulations/lsgg_lfpg.txt"
+template = "briefs/lsgg_lfpg.txt"
 callsign = "SWR22B"
 icao_address = "4b17e2"
 start_offset_s = 300     # departs 5 min behind...

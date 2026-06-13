@@ -373,7 +373,7 @@ mod tests {
 
     #[test]
     fn test_real_flight_log() {
-        let wps = parse_flight_log(include_str!("../../simulations/lsgg_lfpg.txt")).unwrap();
+        let wps = parse_flight_log(include_str!("../../briefs/lsgg_lfpg.txt")).unwrap();
         let path = FlightPath::from_waypoints(wps).unwrap();
 
         // Log says 238 nm and 45 min block-to-block; distance/GS timing
@@ -412,7 +412,7 @@ mod tests {
 
     #[test]
     fn test_bulletin_speed_profile() {
-        let b = parse_bulletin(include_str!("../../simulations/lsgg_lfpg.txt")).unwrap();
+        let b = parse_bulletin(include_str!("../../briefs/lsgg_lfpg.txt")).unwrap();
         let path = FlightPath::from_bulletin(&b).unwrap();
 
         // Departure: lifts off at V2, not at the first waypoint's climb GS
