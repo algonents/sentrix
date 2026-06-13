@@ -10,7 +10,7 @@ Last updated: 2026-06-13.
 
 ## Current model: timeline replay
 
-Simulation mode (`cargo run -- --simulate <bulletin>`) is a clock-driven
+Simulation mode (`cargo run -- --simulate <briefing>`) is a clock-driven
 **replay** of a precomputed timeline. The entire flight is determined at
 startup; the loop only looks up where the plan says the aircraft is at each
 moment. The simulation accepts **no runtime inputs** — the only input is the
@@ -19,15 +19,15 @@ the replay has started.
 
 ### Startup (once)
 
-1. `run_replay` (`replay/run.rs`) reads the SimBrief LIDO OFP bulletin and
-   parses it with `lido::parse_bulletin` into a `LidoBulletin`: the waypoint
+1. `run_replay` (`replay/run.rs`) reads the SimBrief LIDO OFP briefing and
+   parses it with `lido::parse_briefing` into a `LidoBriefing`: the waypoint
    list from the FLIGHT LOG section (ident, lat/lon, FL, TAS, GS, wind
    component per row) plus optionals — callsign, Mode-S code, runways,
    V2/VREF, winds aloft. FLIGHT LOG is the only mandatory section; a
    flight-log-only extract parses with all optionals `None`. Waypoint blocks
    are located by their LAT/LON column patterns (fixed-width slices — column
    positions are load-bearing).
-2. `FlightPath::from_bulletin` (`replay/flight_path.rs`) builds the timeline:
+2. `FlightPath::from_briefing` (`replay/flight_path.rs`) builds the timeline:
    - V2/VREF profile points are synthesized onto the first and last legs:
      lift off at V2 and accelerate towards 250 kt; decelerate through
      ~250/200 kt stages down to VREF on final, with altitude capped to a
@@ -37,7 +37,7 @@ the replay has started.
      the endpoint airports (no FL in the log) are treated as 0 ft.
    - A single pass accumulates time: each leg's duration = haversine
      distance ÷ average of the two endpoint ground speeds. This is
-     deliberately **not** the bulletin's TTLT column, which is
+     deliberately **not** the briefing's TTLT column, which is
      minute-resolution and would create zero-duration segments. Every
      waypoint becomes a `PathPoint` with an absolute `time_s` from departure
      and its great-circle bearing to the next point.
@@ -104,7 +104,7 @@ scenarios** (CWP-style consumers of the CAT-062 feed); the controller loop is
 the long-term capability.
 
 The architecture splits cleanly in two. **Replay** stays a bounded,
-deterministic playback engine — play given bulletins concurrently, control time
+deterministic playback engine — play given briefings concurrently, control time
 (accelerate, jump-to-start), nothing more. **Controllable flights, scenarios and
 clearances are agent-based**: a scenario is something *agents execute*, not
 something replay authors. The sections below describe the agent era; replay's
@@ -119,7 +119,7 @@ We do not build our own flight-profile generator and we do not generate route
 geometry. SimBrief profiles are built from real aircraft performance, real
 routes and real forecast winds; anything we synthesized would be a less
 faithful imitation. Producing an OFP is however a manual per-flight workflow,
-so OFPs become **templates**: one bulletin can be instantiated many times with
+so OFPs become **templates**: one briefing can be instantiated many times with
 variations.
 
 Variations preserve realism — they set each agent's **initial intent** at
@@ -192,7 +192,7 @@ longer predetermined and the same questions get much harder. Solver outputs
 
 **Deterministic playback covers much of visualization debugging:**
 
-- **Determinism is the killer feature**: a given set of bulletins reproduces
+- **Determinism is the killer feature**: a given set of briefings reproduces
   identically every run. Constructing a *specific* geometry ("label overlap
   when SWR12K crosses AFR332 near PAS") is a Phase 3 scenario — but once
   authored it too replays bit-identically, because open-loop execution is
@@ -320,7 +320,7 @@ ignored.
 
 ### Phasing
 
-Replay itself has **no scenario concept**: it plays one or more bulletins
+Replay itself has **no scenario concept**: it plays one or more briefings
 concurrently (shipped) with time control on top (Phase 1), and nothing more.
 All multi-flight situation authoring lives in the agent era — a conflict is
 only meaningful once something can *act* on it.
@@ -346,7 +346,7 @@ controller story becomes the priority.
 
 - [x] Multi-flight loop: a `Vec` of (path, identity) instances, sample each per
   tick, batch all records into **one** `encode_cat062_block` per tick
-  (`--simulate <bulletin>...`).
+  (`--simulate <briefing>...`).
 - [x] `icao_address` → 12-bit track-number collision detection at load (reject
   or remap).
 
@@ -383,7 +383,7 @@ Notes (not tasks):
   instead of hardcoded constants. WRAP is a purely kinematic model (speed,
   altitude, vertical rate per flight phase, derived from ADS-B data) — the
   same modeling philosophy as the agent, so it does not reopen the no-BADA
-  decision. The bulletin already provides the aircraft type; the WRAP data
+  decision. The briefing already provides the aircraft type; the WRAP data
   tables are portable to Rust static tables (mind LGPL attribution if
   embedded). This matters most for clearances: a mid-flight "climb FL360"
   has no SimBrief profile to follow, so per-type rates are what make the
@@ -470,7 +470,7 @@ Notes (not tasks):
   default `--speed 1.0`. Loop-level (scale/offset the elapsed clock, not
   `sample(t)`), so it carries over to the agent model. Excludes pause/step.
 - 2026-06-13 — **Scenarios removed from replay.** Replay is a bounded,
-  deterministic playback engine — concurrent multi-bulletin replay (shipped) +
+  deterministic playback engine — concurrent multi-briefing replay (shipped) +
   time control (Phase 1), nothing more. All situation authoring (templates,
   variations, solver, conflicts) is agent-era (Phase 3), because a conflict is
   only meaningful once something can *act* on it.

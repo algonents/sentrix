@@ -1,4 +1,4 @@
-//! Replay-mode driver: load each bulletin into a `SimFlight`, remap any
+//! Replay-mode driver: load each briefing into a `SimFlight`, remap any
 //! 12-bit track-number collisions, then on every tick sample each flight's
 //! `FlightPath`, build one CAT-062 record per flight, and publish the batch as
 //! a single block.
@@ -30,34 +30,34 @@ struct SimFlight {
     holding_announced: bool,
 }
 
-/// Load one bulletin into a `SimFlight`, printing its summary.
+/// Load one briefing into a `SimFlight`, printing its summary.
 ///
-/// Identity precedence: config override (single-flight mode only) -> bulletin
+/// Identity precedence: config override (single-flight mode only) -> briefing
 /// (FPL callsign / Mode-S CODE) -> per-index fallback.
 fn load_sim_flight(
     config: &Config,
-    bulletin_path: &str,
+    briefing_path: &str,
     index: usize,
     single: bool,
 ) -> Result<SimFlight> {
-    let text = std::fs::read_to_string(bulletin_path)
-        .with_context(|| format!("Failed to read bulletin: {}", bulletin_path))?;
-    let bulletin = lido::parse_bulletin(&text)
-        .with_context(|| format!("Failed to parse OFP bulletin: {}", bulletin_path))?;
-    let log_ete_min = bulletin.waypoints.last().and_then(|w| w.cum_time_min);
-    let path = FlightPath::from_bulletin(&bulletin)
-        .with_context(|| format!("Failed to build flight path: {}", bulletin_path))?;
+    let text = std::fs::read_to_string(briefing_path)
+        .with_context(|| format!("Failed to read briefing: {}", briefing_path))?;
+    let briefing = lido::parse_briefing(&text)
+        .with_context(|| format!("Failed to parse OFP briefing: {}", briefing_path))?;
+    let log_ete_min = briefing.waypoints.last().and_then(|w| w.cum_time_min);
+    let path = FlightPath::from_briefing(&briefing)
+        .with_context(|| format!("Failed to build flight path: {}", briefing_path))?;
 
     let sim = &config.simulation;
     let callsign = single
         .then(|| sim.callsign.clone())
         .flatten()
-        .or(bulletin.callsign)
+        .or(briefing.callsign)
         .unwrap_or_else(|| default_sim_callsign(index));
     let icao_address = single
         .then(|| sim.icao_address.clone())
         .flatten()
-        .or(bulletin.icao_address)
+        .or(briefing.icao_address)
         .unwrap_or_else(|| default_sim_icao_address(index));
 
     let first = path.points().first().unwrap();
@@ -65,8 +65,8 @@ fn load_sim_flight(
     println!(
         "Flight {}: {} -> {} | {} waypoints, {:.0} nm, estimated {:.0} min (log ETE: {})",
         callsign,
-        bulletin.dep_runway.as_deref().unwrap_or(&first.ident),
-        bulletin.arr_runway.as_deref().unwrap_or(&last.ident),
+        briefing.dep_runway.as_deref().unwrap_or(&first.ident),
+        briefing.arr_runway.as_deref().unwrap_or(&last.ident),
         path.points().len(),
         path.total_distance_nm(),
         path.total_duration_s() / 60.0,
@@ -75,15 +75,15 @@ fn load_sim_flight(
     println!(
         "  Aircraft: {} ({}, {}) icao24 {}",
         callsign,
-        bulletin.aircraft_type.as_deref().unwrap_or("type n/a"),
-        bulletin.registration.as_deref().unwrap_or("reg n/a"),
+        briefing.aircraft_type.as_deref().unwrap_or("type n/a"),
+        briefing.registration.as_deref().unwrap_or("reg n/a"),
         icao_address
     );
-    match (bulletin.v2_kts, bulletin.vref_kts) {
+    match (briefing.v2_kts, briefing.vref_kts) {
         (Some(v2), Some(vref)) => {
             println!("  Speed profile: V2 {:.0} kt, VREF {:.0} kt", v2, vref)
         }
-        _ => println!("  Speed profile: n/a (no runway analysis in bulletin)"),
+        _ => println!("  Speed profile: n/a (no runway analysis in briefing)"),
     }
 
     let arrival = last.ident.clone();
@@ -96,26 +96,26 @@ fn load_sim_flight(
     })
 }
 
-/// Replay mode: replay one or more SimBrief LIDO OFP bulletins as CAT062.
+/// Replay mode: replay one or more SimBrief LIDO OFP briefings as CAT062.
 /// All flights share one timeline and their records are batched into a single
 /// CAT062 block per tick.
 pub async fn run_replay(
     config: &Config,
-    bulletin_paths: &[String],
+    briefing_paths: &[String],
     publisher: &Publisher,
 ) -> Result<()> {
-    let single = bulletin_paths.len() == 1;
+    let single = briefing_paths.len() == 1;
     let sim = &config.simulation;
     if !single && (sim.callsign.is_some() || sim.icao_address.is_some()) {
         eprintln!(
-            "Warning: [simulation] identity overrides apply to single-flight mode only - ignored for {} bulletins",
-            bulletin_paths.len()
+            "Warning: [simulation] identity overrides apply to single-flight mode only - ignored for {} briefings",
+            briefing_paths.len()
         );
     }
 
-    let mut flights = Vec::with_capacity(bulletin_paths.len());
-    for (i, bulletin_path) in bulletin_paths.iter().enumerate() {
-        flights.push(load_sim_flight(config, bulletin_path, i, single)?);
+    let mut flights = Vec::with_capacity(briefing_paths.len());
+    for (i, briefing_path) in briefing_paths.iter().enumerate() {
+        flights.push(load_sim_flight(config, briefing_path, i, single)?);
     }
 
     let addresses: Vec<&str> = flights.iter().map(|f| f.icao_address.as_str()).collect();

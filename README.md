@@ -53,7 +53,7 @@ sic = 1
 [udp]
 destination = "127.0.0.1:4000"
 
-# Optional overrides; by default identity comes from the OFP bulletin
+# Optional overrides; by default identity comes from the OFP briefing
 [simulation]
 #callsign = "SIM001"
 #icao_address = "4b1234"
@@ -80,7 +80,7 @@ UDP publisher ready: -> 127.0.0.1:4000
 
 ## Simulation Mode
 
-Instead of live OpenSky data, Sentrix can replay one or more [SimBrief](https://www.simbrief.com/) LIDO-layout OFP bulletins, publishing the simulated aircraft as CAT-062 in real time:
+Instead of live OpenSky data, Sentrix can replay one or more [SimBrief](https://www.simbrief.com/) LIDO-layout OFP briefings, publishing the simulated aircraft as CAT-062 in real time:
 
 ```bash
 cargo run -- --simulate briefs/lsgg_lfpg.txt
@@ -89,9 +89,9 @@ cargo run -- --simulate briefs/lsgg_lfpg.txt briefs/lsgg_lszh.txt  # concurrent 
 
 No OpenSky credentials are needed in this mode. Sentrix parses the FLIGHT LOG waypoints (position, flight level, TAS, GS), builds a timeline from leg distance and ground speed, and interpolates position, altitude and speeds between waypoints on every tick (`poll_interval_secs`). All flights depart together at startup; each tick publishes one record per flight, batched into a single CAT-062 block. On arrival, an aircraft holds its final position with zero velocity.
 
-When the input is a full bulletin (not just a flight-log extract), the other sections refine the simulation:
+When the input is a full briefing (not just a flight-log extract), the other sections refine the simulation:
 
-- **Identity**: the ATC callsign (ICAO flight plan item 7) is published in the CAT-062 target identification (I062/245) and the Mode-S address (`CODE/` item) seeds the 12-bit track number, for flight-plan correlation. `[simulation]` config values override them (single-flight mode only). Concurrent flights whose Mode-S codes share a track number — common when bulletins come from the same SimBrief airframe — are remapped onto fallback addresses with a warning. *Known limitation: the full 24-bit Mode-S address belongs in I062/380 (ADR), which libasterix 0.1.0 does not yet encode — `icao_address` is populated on the record and will be transmitted once the crate supports it.*
+- **Identity**: the ATC callsign (ICAO flight plan item 7) is published in the CAT-062 target identification (I062/245) and the Mode-S address (`CODE/` item) seeds the 12-bit track number, for flight-plan correlation. `[simulation]` config values override them (single-flight mode only). Concurrent flights whose Mode-S codes share a track number — common when briefings come from the same SimBrief airframe — are remapped onto fallback addresses with a warning. *Known limitation: the full 24-bit Mode-S address belongs in I062/380 (ADR), which libasterix 0.1.0 does not yet encode — `icao_address` is populated on the record and will be transmitted once the crate supports it.*
 - **Speed profile**: V2 (takeoff runway analysis) and VREF (landing distance table, interpolated at the planned landing weight) drive realistic acceleration after takeoff and deceleration to the threshold on final, with a ~3° glide — bringing the replay duration in line with the plan's ETE.
 - **Winds aloft** are parsed and reserved for future climb/descent modelling.
 

@@ -56,9 +56,9 @@ pub struct UdpConfig {
 
 /// Identity overrides for the simulated aircraft in simulation mode.
 ///
-/// When unset, the values from the OFP bulletin are used (ATC callsign and
+/// When unset, the values from the OFP briefing are used (ATC callsign and
 /// Mode-S CODE from the ICAO flight plan), with hardcoded fallbacks for
-/// bulletins that lack a flight plan section.
+/// briefings that lack a flight plan section.
 #[derive(Debug, Default, Deserialize)]
 pub struct SimulationConfig {
     /// Callsign published in the CAT062 target identification
@@ -118,7 +118,7 @@ destination = "127.0.0.1:4000"
         assert_eq!(config.asterix.sac, 1);
         assert_eq!(config.asterix.sic, 2);
         assert_eq!(config.udp.destination, "127.0.0.1:4000");
-        // [simulation] section is optional; unset values defer to the bulletin
+        // [simulation] section is optional; unset values defer to the briefing
         assert_eq!(config.simulation.callsign, None);
         assert_eq!(config.simulation.icao_address, None);
     }

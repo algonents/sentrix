@@ -1,4 +1,4 @@
-//! SimBrief LIDO operational flight plan (OFP) bulletin parser
+//! SimBrief LIDO operational flight plan (OFP) briefing parser
 //!
 //! Parses the LIDO-layout OFP that SimBrief generates (see `briefs/*.txt`).
 //! The FLIGHT LOG section is mandatory; every other section (ICAO flight plan,
@@ -16,16 +16,16 @@
 //!
 //! Blocks are located by the LAT/LONG column patterns rather than by section
 //! structure, so page-break header repeats, FREQ lines and FIR-boundary rows
-//! are handled naturally — and the scan is unaffected by the other bulletin
+//! are handled naturally — and the scan is unaffected by the other briefing
 //! sections. All per-waypoint values other than the coordinates are optional:
 //! airports omit FL, climb/descent rows omit TAS, FIR crossings carry
 //! coordinates only.
 
 use anyhow::{bail, Result};
 
-/// Everything extracted from a LIDO bulletin
+/// Everything extracted from a LIDO briefing
 #[derive(Debug)]
-pub struct LidoBulletin {
+pub struct LidoBriefing {
     /// Flight log waypoints (the only mandatory section)
     pub waypoints: Vec<Waypoint>,
     /// ATC callsign — ICAO flight plan item 7 (what radar labels display)
@@ -92,11 +92,11 @@ pub struct Waypoint {
     pub cum_time_min: Option<u32>,
 }
 
-/// Parse a full LIDO bulletin (or a flight-log-only extract of one).
-pub fn parse_bulletin(text: &str) -> Result<LidoBulletin> {
+/// Parse a full LIDO briefing (or a flight-log-only extract of one).
+pub fn parse_briefing(text: &str) -> Result<LidoBriefing> {
     let lines: Vec<&str> = text.lines().collect();
     let (dep_runway, arr_runway) = parse_routing(&lines);
-    Ok(LidoBulletin {
+    Ok(LidoBriefing {
         waypoints: parse_flight_log(text)?,
         callsign: parse_fpl_callsign(&lines),
         registration: parse_fpl_token(&lines, "REG/"),
@@ -484,7 +484,7 @@ fn parse_hhmm(s: &str) -> Option<u32> {
 mod tests {
     use super::*;
 
-    const BULLETIN: &str = include_str!("../../briefs/lsgg_lfpg.txt");
+    const BRIEFING: &str = include_str!("../../briefs/lsgg_lfpg.txt");
 
     /// A flight-log-only extract (no FPL, runway analysis or wind sections)
     const EXTRACT: &str = "\
@@ -514,8 +514,8 @@ PAS        E00600.0 0002 ...   6   232  276          436  ....  ....
 
     #[test]
     fn test_parse_full_log() {
-        // The waypoint scan must not be confused by the other bulletin sections
-        let wps = parse_flight_log(BULLETIN).unwrap();
+        // The waypoint scan must not be confused by the other briefing sections
+        let wps = parse_flight_log(BRIEFING).unwrap();
         assert_eq!(wps.len(), 17);
         assert_eq!(wps.first().unwrap().ident, "LSGG");
         assert_eq!(wps.last().unwrap().ident, "LFPG");
@@ -523,7 +523,7 @@ PAS        E00600.0 0002 ...   6   232  276          436  ....  ....
 
     #[test]
     fn test_parse_waypoint_fields() {
-        let wps = parse_flight_log(BULLETIN).unwrap();
+        let wps = parse_flight_log(BRIEFING).unwrap();
 
         // PASSEIRY: full climb waypoint (no TAS printed during climb)
         let pas = &wps[1];
@@ -555,8 +555,8 @@ PAS        E00600.0 0002 ...   6   232  276          436  ....  ....
     }
 
     #[test]
-    fn test_parse_full_bulletin() {
-        let b = parse_bulletin(BULLETIN).unwrap();
+    fn test_parse_full_briefing() {
+        let b = parse_briefing(BRIEFING).unwrap();
 
         assert_eq!(b.waypoints.len(), 17);
         assert_eq!(b.callsign.as_deref(), Some("ALU"));
@@ -576,7 +576,7 @@ PAS        E00600.0 0002 ...   6   232  276          436  ....  ....
 
     #[test]
     fn test_parse_wind_information() {
-        let b = parse_bulletin(BULLETIN).unwrap();
+        let b = parse_briefing(BRIEFING).unwrap();
 
         let names: Vec<&str> = b.wind_profiles.iter().map(|p| p.name.as_str()).collect();
         assert_eq!(
@@ -599,7 +599,7 @@ PAS        E00600.0 0002 ...   6   232  276          436  ....  ....
 
     #[test]
     fn test_extract_only_degrades_gracefully() {
-        let b = parse_bulletin(EXTRACT).unwrap();
+        let b = parse_briefing(EXTRACT).unwrap();
         assert_eq!(b.waypoints.len(), 2);
         assert_eq!(b.callsign, None);
         assert_eq!(b.registration, None);

@@ -34,7 +34,7 @@ pub fn default_sim_icao_address(index: usize) -> String {
 
 /// Replacement addresses so every flight publishes a distinct 12-bit track
 /// number - a shared one would corrupt downstream tracker correlation.
-/// Bulletins generated from the same SimBrief airframe share a Mode-S CODE,
+/// Briefings generated from the same SimBrief airframe share a Mode-S CODE,
 /// so collisions are the common case, not the exception; colliding flights
 /// after the first are remapped onto the fallback address range.
 ///

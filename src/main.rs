@@ -2,8 +2,8 @@
 //!
 //! Publishes aircraft state as ASTERIX CAT062 over UDP. Two independent
 //! sources share only `shared`: **live** mode polls the OpenSky Network, and
-//! **replay** mode (`--simulate <bulletin>...`) replays one or more SimBrief
-//! OFP bulletins concurrently. A future **agent** mode will live alongside them.
+//! **replay** mode (`--simulate <briefing>...`) replays one or more SimBrief
+//! OFP briefings concurrently. A future **agent** mode will live alongside them.
 
 mod agent;
 mod live;
@@ -17,7 +17,7 @@ use crate::replay::run::run_replay;
 use crate::shared::config::Config;
 use crate::shared::publisher::Publisher;
 
-/// Extract the bulletin paths from a `--simulate <path>...` argument, if present
+/// Extract the briefing paths from a `--simulate <path>...` argument, if present
 fn parse_simulate_arg() -> Result<Option<Vec<String>>> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.iter().position(|a| a == "--simulate") {
@@ -28,7 +28,7 @@ fn parse_simulate_arg() -> Result<Option<Vec<String>>> {
                 .cloned()
                 .collect();
             if paths.is_empty() {
-                bail!("--simulate requires at least one bulletin path, e.g. --simulate briefs/lsgg_lfpg.txt");
+                bail!("--simulate requires at least one briefing path, e.g. --simulate briefs/lsgg_lfpg.txt");
             }
             Ok(Some(paths))
         }
@@ -41,7 +41,7 @@ async fn main() -> Result<()> {
     println!("Sentrix - OpenSky to ASTERIX CAT062 converter");
     println!("============================================");
 
-    let bulletin_paths = parse_simulate_arg()?;
+    let briefing_paths = parse_simulate_arg()?;
 
     // Load configuration
     let config = Config::load().context("Failed to load configuration")?;
@@ -54,7 +54,7 @@ async fn main() -> Result<()> {
     let publisher = Publisher::new(&config.udp.destination)?;
     println!("UDP publisher ready: -> {}", config.udp.destination);
 
-    match bulletin_paths {
+    match briefing_paths {
         Some(paths) => run_replay(&config, &paths, &publisher).await,
         None => run_live(&config, &publisher).await,
     }
