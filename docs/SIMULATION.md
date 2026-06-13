@@ -315,35 +315,36 @@ phasing minimizes rework but is not sacred.
 
 #### Phase 1 — Multi-flight scenario player (replay-based; days)
 
-- Scenario TOML (`--scenario <file>`, keeping `--simulate <bulletin>` as the
+- [ ] Scenario TOML (`--scenario <file>`, keeping `--simulate <bulletin>` as the
   single-flight shortcut): per-flight `template`, `callsign`, `icao24`,
   `start_offset_s`, `speed_factor`, `cruise_shift_ft`, `lateral_offset_nm`.
-- Variations implemented as transforms on the waypoint columns before
+- [ ] Variations implemented as transforms on the waypoint columns before
   `FlightPath` construction; `speed_factor` applied before V2/VREF synthesis.
-- Multi-flight loop: a `Vec` of (path, identity, offset) instances, sample
+- [x] Multi-flight loop: a `Vec` of (path, identity, offset) instances, sample
   each per tick, batch all records into **one** `encode_cat062_block` per
   tick (live mode already proves multi-record blocks downstream).
-- icao24 → 12-bit track-number collision detection at scenario load
+  *(via `--simulate <path>...`; the `offset` field awaits the scenario TOML.)*
+- [x] icao24 → 12-bit track-number collision detection at scenario load
   (reject or remap).
-- For visualization debugging, include: time control (scale + start offset),
+- [ ] For visualization debugging, include: time control (scale + start offset),
   terminate-after-arrival option, and the CAT-062 field audit against the
   actual consumer.
 
 #### Phase 2 — Scenario solver (replay timelines are closed-form; days)
 
-- Closest-approach report between any two flights (where/when separation
+- [ ] Closest-approach report between any two flights (where/when separation
   drops below a threshold).
-- Offset solving: co-locate two flights at a chosen fix / chosen time
+- [ ] Offset solving: co-locate two flights at a chosen fix / chosen time
   (overtake at PAS, crossing conflict at X at t=600).
-- Build on replay before the agent migration; outputs remain valid as agent
+- [ ] Build on replay before the agent migration; outputs remain valid as agent
   initial conditions.
 
 #### Phase 3 — Kinematic agent (the structural change; up to a week)
 
-- `Aircraft` with state (lat, lon, alt_ft, gs_kts, track_deg) + intent
+- [ ] `Aircraft` with state (lat, lon, alt_ft, gs_kts, track_deg) + intent
   (cleared FL, LNAV-route-or-assigned-heading, target speed) + `step(dt)`
   with the four rate limiters.
-- Optional fidelity upgrade: source the rate limits per aircraft type from
+- [ ] Optional fidelity upgrade: source the rate limits per aircraft type from
   **OpenAP/WRAP** (TU Delft, LGPL-3.0, https://github.com/TUDelft-CNS-ATM/openap)
   instead of hardcoded constants. WRAP is a purely kinematic model (speed,
   altitude, vertical rate per flight phase, derived from ADS-B data) — the
@@ -357,22 +358,22 @@ phasing minimizes rework but is not sacred.
   consumer. Related prior art: **BlueSky** (same TU Delft group), an open
   ATM simulator whose command stack (ALT/HDG/SPD/DCT) closely matches our
   phase 4 protocol — a good reference for clearance semantics and LNAV.
-- LNAV: waypoint sequencing, turn anticipation, rejoin-route after vector.
-- `FlightPath` becomes the plan; targets derived from it per phase.
-- **Regression test**: uncleared agent flying its plan matches replay output
+- [ ] LNAV: waypoint sequencing, turn anticipation, rejoin-route after vector.
+- [ ] `FlightPath` becomes the plan; targets derived from it per phase.
+- [ ] **Regression test**: uncleared agent flying its plan matches replay output
   within tolerance. Replay is **not** deleted afterwards — it remains a
   permanent coexisting mode (see "Mode coexistence" above); the parity test
   becomes a standing check rather than a one-off migration gate.
-- Tick-rate detail: at 3°/s a 5 s publish tick is a 15° heading jump —
+- [ ] Tick-rate detail: at 3°/s a 5 s publish tick is a 15° heading jump —
   integrate internally at ~1 s sub-steps, publish every
   `poll_interval_secs`.
 
 #### Phase 4 — Clearance channel (days)
 
-- `tokio::select!` over tick timer + command source (UDP or TCP lines).
-- Text protocol: `<CALLSIGN> CFL <fl> | HDG <deg> | DCT <wpt> | SPD <kts>`,
+- [ ] `tokio::select!` over tick timer + command source (UDP or TCP lines).
+- [ ] Text protocol: `<CALLSIGN> CFL <fl> | HDG <deg> | DCT <wpt> | SPD <kts>`,
   with simple ack/error replies.
-- This phase completes the controller-in-the-loop story: solver authors the
+- [ ] This phase completes the controller-in-the-loop story: solver authors the
   conflict → agents fly it → CWP displays it → controller sends
   `SWR22B SPD 250` → the agent's intent updates and the situation resolves.
 
