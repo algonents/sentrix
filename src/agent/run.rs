@@ -10,6 +10,9 @@ use chrono::Utc;
 use libasterix::asterix::cat062::encode_cat062_block;
 
 use crate::agent::aircraft::Aircraft;
+use crate::agent::performance::{
+    DefaultPerformance, PerformanceModel, WrapPerformance, DEFAULT_VERTICAL_RATE_FPM,
+};
 use crate::shared::cat062::{
     default_sim_callsign, default_sim_icao_address, flight_record, remap_track_collisions,
 };
@@ -32,6 +35,7 @@ fn load_aircraft(
     briefing_path: &str,
     index: usize,
     single: bool,
+    perf: &dyn PerformanceModel,
 ) -> Result<Aircraft> {
     let text = std::fs::read_to_string(briefing_path)
         .with_context(|| format!("Failed to read briefing: {}", briefing_path))?;
@@ -39,6 +43,10 @@ fn load_aircraft(
         .with_context(|| format!("Failed to parse OFP briefing: {}", briefing_path))?;
     let plan = FlightPlan::from_briefing(&briefing)
         .with_context(|| format!("Failed to build flight plan: {}", briefing_path))?;
+
+    // Resolve the aircraft type's vertical-rate limits from the performance
+    // model (defaults to flat constants when no WRAP data is loaded).
+    let limits = perf.vertical_limits(briefing.aircraft_type.as_deref().unwrap_or(""));
 
     let sim = &config.simulation;
     let callsign = single
@@ -70,16 +78,34 @@ fn load_aircraft(
         icao_address
     );
 
-    Ok(Aircraft::new(callsign, icao_address, plan))
+    Ok(Aircraft::new(callsign, icao_address, plan, limits))
 }
 
 /// Agent mode: fly one or more briefs as stateful kinematic agents, integrating
-/// each per tick and publishing a single CAT-062 block.
+/// each per tick and publishing a single CAT-062 block. `performance_dir`, if
+/// given, loads OpenAP WRAP per-type rate limits from that directory.
 pub async fn run_agent(
     config: &Config,
     briefing_paths: &[String],
     publisher: &Publisher,
+    performance_dir: Option<&str>,
 ) -> Result<()> {
+    let perf: Box<dyn PerformanceModel> = match performance_dir {
+        Some(dir) => {
+            let wrap = WrapPerformance::load(dir, DEFAULT_VERTICAL_RATE_FPM)
+                .with_context(|| format!("Failed to load performance data from {}", dir))?;
+            println!("Performance: OpenAP WRAP from {}", dir);
+            Box::new(wrap)
+        }
+        None => {
+            println!(
+                "Performance: built-in defaults ({:.0} fpm). Use --performance <dir> for OpenAP WRAP.",
+                DEFAULT_VERTICAL_RATE_FPM
+            );
+            Box::new(DefaultPerformance::new(DEFAULT_VERTICAL_RATE_FPM))
+        }
+    };
+
     let single = briefing_paths.len() == 1;
     let sim = &config.simulation;
     if !single && (sim.callsign.is_some() || sim.icao_address.is_some()) {
@@ -91,7 +117,7 @@ pub async fn run_agent(
 
     let mut fleet = Vec::with_capacity(briefing_paths.len());
     for (i, briefing_path) in briefing_paths.iter().enumerate() {
-        fleet.push(load_aircraft(config, briefing_path, i, single)?);
+        fleet.push(load_aircraft(config, briefing_path, i, single, perf.as_ref())?);
     }
 
     let addresses: Vec<&str> = fleet.iter().map(|a| a.icao_address.as_str()).collect();

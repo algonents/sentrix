@@ -101,6 +101,39 @@ the replay has started.
   GS, making reported speed and positional derivative identical by
   definition, with acceleration an explicit rate limiter.
 
+## Current model: agent mode
+
+Agent mode (`cargo run -- --agent <briefing>...`) flies each brief as a
+stateful **kinematic agent** rather than replaying a timeline. It is
+independent of replay — it shares only `shared/` (plan, geo, CAT-062 helpers,
+publisher), never the replay loop.
+
+- **`agent/aircraft.rs`** — `Aircraft` holds live state (lat, lon, altitude,
+  GS, track) plus plan progress, advanced each `step(dt)`:
+
+  - **LNAV** — steer toward the active waypoint, turning at ≤3°/s; sequence on a
+    1 nm capture + overshoot guard. (Turn anticipation still pending.)
+
+  - **Ground speed** — move toward the leg's target GS at ≤0.7 kt/s.
+
+  - **VNAV (vertical)** — pace toward the active fix's planned altitude at
+    `min(required_rate, performance_limit)`, so it tracks the plan where the
+    type can and falls short honestly when the limit binds.
+
+  - **Position** — integrate forward along the current track at GS.
+
+- **`agent/performance.rs`** — a pluggable `PerformanceModel` supplying per-type
+  climb/descent rate limits. Default is a flat 2000 fpm (no data needed);
+  `--performance <dir>` loads OpenAP WRAP limits from a *user-supplied*
+  directory (GPL-3.0 data — never shipped). See Phase 2 / OpenAP Slice 1.
+
+- **`agent/run.rs`** — loads briefs, remaps 12-bit track collisions, integrates
+  ~1 s sub-steps, and publishes one CAT-062 block per `poll_interval_secs`.
+
+**Implemented:** Phase 2 core (agent + LNAV + VNAV) and OpenAP Slice 1
+(per-type vertical performance). **Pending:** turn anticipation, the
+agent-vs-replay parity test, and Slice 2 (CAS/Mach speed schedule). See Phasing.
+
 ## Direction
 
 ### Goal
@@ -441,27 +474,78 @@ Notes (not tasks):
 - [ ] LNAV: rejoin-route after a heading vector (needs the `Heading` intent —
   lands with the clearance channel, Phase 4).
 
-- [ ] *Improvement (low CWP impact, deferred):* speed/altitude **constraint
-  scheduling**. Each leg's target GS/altitude is currently chased at a constant
-  rate (0.7 kt/s, 2000 fpm) starting when the leg becomes active — i.e. *at* the
-  fix. A real FMS schedules the change early so it crosses the fix already at the
-  constraint speed/level. This only shifts the *timing/location* of value
-  changes, which a CWP doesn't surface (unlike turn anticipation, whose lateral
-  overshoot is directly visible on the scope). Skip unless conflict-prediction
-  (MTCD) fidelity is wanted.
+The agent reads its rate limits and target speeds through a **pluggable
+performance provider** (a trait), so the numbers can come from anywhere. sentrix
+ships only the *code* — the trait, a built-in default, and a loader for the
+OpenAP format — and **never the OpenAP data**: that data is **GPL-3.0**
+(`openap/data/`), incompatible with sentrix's MIT licence, so it is not
+vendored. A user supplies a performance file at runtime (an OpenAP WRAP file
+they obtained, or entirely different numbers in the same shape). With no file,
+the agent uses the built-in default constants — today's behaviour. Both slices
+**reimplement OpenAP's logic in idiomatic Rust** (typed structs, a `FlightPhase`
+enum — not a transliteration); the Python in `kinematic.py` / `aero.py` is the
+behavioural reference to match and **test against**, never transcribed.
+(Reference checkout: `~/Repos/openap`.)
 
-- [ ] Optional fidelity upgrade: source the rate limits per aircraft type from
-  **OpenAP/WRAP** (TU Delft, LGPL-3.0, https://github.com/TUDelft-CNS-ATM/openap)
-  instead of hardcoded constants. WRAP is a purely kinematic model (speed,
-  altitude, vertical rate per flight phase, derived from ADS-B data) — the
-  same modeling philosophy as the agent, so it does not reopen the no-BADA
-  decision. The briefing already provides the aircraft type; the WRAP data
-  tables are portable to Rust static tables (mind LGPL attribution if
-  embedded). This matters most for clearances: a mid-flight "climb FL360"
-  has no SimBrief profile to follow, so per-type rates are what make the
-  maneuver realistic. Related prior art: **BlueSky** (same TU Delft group), an
-  open ATM simulator whose command stack (ALT/HDG/SPD/DCT) closely matches our
-  clearance-channel protocol — a good reference for clearance semantics and LNAV.
+- [x] **OpenAP Slice 1 — vertical performance (VNAV + per-type ROC/ROD).** Pace
+  the climb/descent to **meet each fix's planned altitude** (constraint-meeting),
+  **bounded by the type's real performance** from WRAP. When the plan asks for
+  more than the type can do, the cap binds and the agent **falls short honestly**
+  — physically grounded, not faked. Subsumes the old "constraint scheduling"
+  deferral (its altitude half). Steps:
+
+  - [x] Define a `PerformanceModel` trait (in `agent/performance.rs`) the agent
+    consults for the climb/descent rate **limit** by aircraft type + altitude,
+    with a **default** impl = today's constants (used when no file is loaded).
+
+  - [x] **OpenAP WRAP loader** — reimplements `openap/kinematic.py::WRAP`. Parse
+    a *user-supplied* fixed-width `data/wrap/<type>.txt` and expose the vertical
+    rates `ic_vs_avg`, `cl_vs_avg_{pre_cas,cas_const,mach_const}`,
+    `de_vs_avg_{mach_const,cas_const,after_cas}` + crossover altitudes
+    `cl_h_{cas,mach}_const`, `de_h_{mach,cas}_const` (take the `default`/opt
+    column, as `_get_var`). Convert SI → ours (m/s→fpm, km→ft). Resolve the
+    briefing type by lower-casing + the `_synonym.csv` fallback (as
+    `WRAP.__init__`). Not shipped — read from a user-set path.
+
+  - [x] In `step(dt)`, compute the required rate to reach the active leg's target
+    altitude — `required = (target_alt − alt) / (dist_to_fix / gs)` — and climb/
+    descend at `min(required, wrap_limit(type, alt))`. Falls back to the default
+    limit for unknown type / no file.
+
+  - [x] Validate against the reference: a unit test asserting our parsed values +
+    band selection equal `openap.WRAP('A320')` (e.g. `climb_vs_concas()` →
+    `cl_vs_avg_cas_const`); capture a few numbers from the Python as fixtures.
+
+  - [x] Verify at the DJL crossing with a WRAP file loaded: the agent tracks the
+    planned FL where the type can, and falls short **only** when the rate limit
+    binds.
+
+- [ ] **OpenAP Slice 2 — speed schedule (CAS/Mach → GS).** Extend the provider
+  with per-type climb/cruise/descent CAS & Mach (+ cruise ceiling), so maneuvers
+  with **no brief profile** — clearance climbs ("climb FL360"), brief-less
+  Phase-3 flights — are realistic. Depends on Slice 1; lands with/before Phase 4.
+  Steps:
+
+  - [ ] Reimplement the ISA atmosphere + airspeed conversions from
+    `openap/aero.py` in idiomatic Rust: `atmos(h, dT)` (11 km tropopause split +
+    the ISA constants), `vsound`, `cas2tas`, `mach2tas` (and `crossover_alt` if
+    used). Test outputs match `aero.*` at sample altitudes.
+
+  - [ ] Extend the trait + WRAP loader with the speed schedule:
+    `cl_v_cas_const`, `cl_v_mach_const`, `cr_v_cas_mean`, `cr_v_mach_mean`,
+    `de_v_cas_const`, `de_v_mach_const`, and ceiling `cr_h_max`.
+
+  - [ ] In `step(dt)`, use the schedule for target speed — CAS/Mach → TAS (the
+    conversion) → GS via wind — when no brief profile applies.
+
+Both slices use only OpenAP's *kinematic* numbers — the kinetic (thrust/drag/
+fuel) half stays out, so the no-BADA decision holds. **Licensing:** OpenAP data
+is GPL-3.0 and is **never shipped or vendored**; sentrix provides only the
+loader, so the repo stays MIT, and the pluggable provider lets anyone supply
+their own numbers. Loading OpenAP data is the user's private use (GPL imposes
+nothing on private use); cite OpenAP (Junzi Sun) per academic norm. *(Prior art:
+BlueSky, same group, whose ALT/HDG/SPD/DCT command stack matches our clearance
+protocol.)*
 
 #### Phase 3 — Scenarios: agents execute a given situation (open-loop; days)
 
@@ -563,3 +647,10 @@ Notes (not tasks):
 - 2026-06-13 — **No track termination.** An arrived flight holds its last
   (ground) position indefinitely; no coast/drop handling — unnecessary
   complexity for a visualization feed.
+
+- 2026-06-13 — **Performance data is pluggable, not bundled.** The agent reads
+  rate limits / target speeds through a `PerformanceModel` trait with a built-in
+  default (today's constants); OpenAP is one *loadable* source. OpenAP's
+  performance data is **GPL-3.0**, incompatible with sentrix's **MIT** licence,
+  so it is **never vendored or shipped** — the user supplies a performance file
+  at runtime. Keeps the repo MIT and lets users plug entirely different numbers.
