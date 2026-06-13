@@ -378,6 +378,14 @@ Notes (not tasks):
 - [ ] `Aircraft` with state (lat, lon, `altitude_ft`, `gs_kts`, `track_deg`) +
   intent (cleared FL, LNAV-route-or-assigned-heading, target speed) + `step(dt)`
   with the four rate limiters.
+- [ ] *Improvement (low CWP impact, deferred):* speed/altitude **constraint
+  scheduling**. Each leg's target GS/altitude is currently chased at a constant
+  rate (0.7 kt/s, 2000 fpm) starting when the leg becomes active — i.e. *at* the
+  fix. A real FMS schedules the change early so it crosses the fix already at the
+  constraint speed/level. This only shifts the *timing/location* of value
+  changes, which a CWP doesn't surface (unlike turn anticipation, whose lateral
+  overshoot is directly visible on the scope). Skip unless conflict-prediction
+  (MTCD) fidelity is wanted.
 - [ ] Optional fidelity upgrade: source the rate limits per aircraft type from
   **OpenAP/WRAP** (TU Delft, LGPL-3.0, https://github.com/TUDelft-CNS-ATM/openap)
   instead of hardcoded constants. WRAP is a purely kinematic model (speed,
