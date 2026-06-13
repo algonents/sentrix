@@ -6,7 +6,16 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::path::Path;
 
-use crate::opensky::BoundingBox;
+/// Geographic bounding box for filtering aircraft. Defined here (not in the
+/// live/OpenSky client) so the shared config layer owns no mode-specific
+/// dependency; the live client imports it from here for its query shape.
+#[derive(Debug, Clone, Deserialize)]
+pub struct BoundingBox {
+    pub min_lat: f64,
+    pub max_lat: f64,
+    pub min_lon: f64,
+    pub max_lon: f64,
+}
 
 /// Main configuration structure
 #[derive(Debug, Deserialize)]

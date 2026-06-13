@@ -25,21 +25,41 @@ Sentrix is a single-binary Tokio async loop with two modes sharing one output pa
 
 ```
 live:  OpenSky REST (JSON)  --fetch_states-->  StateVector  --state_to_cat062-->  Cat062Record  --encode_cat062_block-->  UDP bytes
-sim:   LIDO OFP bulletin  --parse_bulletin-->  LidoBulletin  --FlightPath::from_bulletin / sample-->  Cat062Record  --encode_cat062_block-->  UDP bytes
+replay: LIDO OFP bulletin  --parse_bulletin-->  LidoBulletin  --FlightPath::from_bulletin / sample-->  Cat062Record  --encode_cat062_block-->  UDP bytes
 ```
 
-Six modules, each a thin layer with one responsibility:
+The binary is **pure dispatch** (`main.rs`); each CAT-062 source is its own module, and mode-agnostic code lives in `shared/`. Replay mode and the future agent mode are deliberately **independent** — they share only `shared/`, never an execution loop (see `docs/SIMULATION.md`).
 
-- **`main.rs`** — orchestrates both loops (`run_live` / `run_simulation`, selected by the `--simulate <file>` arg). The conversion function `state_to_cat062` lives here (not in `opensky.rs`) because it depends on `libasterix` types; keeping it in `main` avoids coupling the OpenSky client to ASTERIX concepts. The live loop polls on `poll_interval_secs`, and on `OpenSkyError::RateLimited` sleeps for the server-provided `retry-after` (or 30s fallback) *in addition to* the normal poll interval. The sim loop replays one or more bulletins on the same interval, batching one record per flight per tick into a single CAT-062 block; flights whose Mode-S codes share a 12-bit track number are remapped onto fallback addresses with a warning (common case: bulletins generated from the same SimBrief airframe). `[simulation]` config identity overrides apply in single-flight mode only.
-- **`lido.rs`** — SimBrief LIDO OFP bulletin parser. The FLIGHT LOG section is the only mandatory one; waypoint blocks are located by fixed-width column slices — column positions are load-bearing.
-- **`simulation.rs`** — turns waypoints into a time-indexed `FlightPath` and interpolates state with `sample(elapsed)`. How the timeline is built, the V2/VREF profile synthesis, and the design decisions behind it are documented in `docs/SIMULATION.md`.
-- **`opensky.rs`** — OpenSky REST client + OAuth2 client-credentials flow. `TokenManager` caches the access token behind an `Arc<RwLock<...>>` and refreshes 60 s before expiry. `StateVector` has a **custom `Deserialize`** because OpenSky returns state vectors as positional JSON arrays (17 or 18 elements); the field-to-index mapping in the struct comments is load-bearing — do not reorder. `OpenSkyError` distinguishes rate limits from other failures so the main loop can back off specifically on 429.
-- **`config.rs`** — TOML config loader. `BoundingBox` is re-exported from `opensky.rs` (not defined here) so the API client owns its own query-shape type.
-- **`publisher.rs`** — thin `UdpSocket` wrapper. Binds to `0.0.0.0:0` (ephemeral local port) and `send_to`s each ASTERIX block as one UDP datagram. No fragmentation or framing is added — the receiver is expected to parse ASTERIX block boundaries itself.
+```
+src/
+  main.rs            arg parsing + dispatch (run_replay on --simulate, else run_live)
+  shared/            mode-agnostic infrastructure; depends on no mode
+    config.rs        TOML config loader; also defines BoundingBox (moved here from opensky so shared owns no mode dependency)
+    publisher.rs     thin UdpSocket wrapper
+    lido.rs          SimBrief LIDO OFP bulletin parser
+    geo.rs           haversine_nm / initial_bearing_deg
+    cat062.rs        common CAT-062 helpers: seconds_since_midnight_utc, KNOTS_TO_MPS, track-collision remap, sim identity fallbacks
+  live/              OpenSky live mode
+    opensky.rs       REST client + OAuth2 client-credentials flow
+    run.rs           run_live polling loop + state_to_cat062
+  replay/            deterministic bulletin playback
+    flight_path.rs   FlightPath + sample(elapsed)
+    run.rs           run_replay loop + SimFlight + load_sim_flight
+  agent/             placeholder for the future stateful agent engine (empty)
+```
+
+Load-bearing details:
+
+- **`main.rs`** dispatches to `run_replay` (`--simulate <bulletin>...`) or `run_live`. Both `state_to_cat062` (live) and the replay record-building stay in their mode's `run.rs` because they depend on `libasterix` types; keeping them out of `opensky.rs` / `flight_path.rs` avoids coupling those to ASTERIX concepts.
+- **`live/run.rs`** — polls on `poll_interval_secs`, and on `OpenSkyError::RateLimited` sleeps for the server-provided `retry-after` (or 30s fallback) *in addition to* the normal poll interval.
+- **`replay/run.rs`** — replays one or more bulletins on the same interval, batching one record per flight per tick into a single CAT-062 block; flights whose Mode-S codes share a 12-bit track number are remapped onto fallback addresses with a warning (common case: bulletins generated from the same SimBrief airframe). `[simulation]` config identity overrides apply in single-flight mode only.
+- **`shared/lido.rs`** — the FLIGHT LOG section is the only mandatory one; waypoint blocks are located by fixed-width column slices — column positions are load-bearing.
+- **`live/opensky.rs`** — `TokenManager` caches the access token behind an `Arc<RwLock<...>>` and refreshes 60 s before expiry. `StateVector` has a **custom `Deserialize`** because OpenSky returns state vectors as positional JSON arrays (17 or 18 elements); the field-to-index mapping in the struct comments is load-bearing — do not reorder. `OpenSkyError` distinguishes rate limits from other failures so the live loop can back off specifically on 429.
+- **`shared/publisher.rs`** — binds to `0.0.0.0:0` (ephemeral local port) and `send_to`s each ASTERIX block as one UDP datagram. No fragmentation or framing is added — the receiver parses ASTERIX block boundaries itself.
 
 ## Simulation engine: current model and direction
 
-The simulation is currently a **timeline replay**: the whole flight is precomputed at startup and `sample(elapsed)` is a pure function of time. The agreed direction (2026-06-12) is to adapt this into a stateful, agent-based model with a **feedback loop where clearances can be submitted** (CFL/HDG/DCT/SPD over a command channel), multi-flight scenarios built from SimBrief OFPs used as templates, and conflict scenarios. Physics stays simple and ground-speed based — no BADA. See `docs/SIMULATION.md` for the full description, the four-phase plan, the migration-durability analysis, and the decisions log. Until the agent phase lands: do not add features *inside* `sample(t)` — loop-level features (time control, track lifecycle, command channel) are fine, they carry over.
+`replay/` is a **timeline replay**: the whole flight is precomputed at startup and `sample(elapsed)` is a pure function of time. The agreed direction (2026-06-13) keeps replay a bounded, deterministic playback engine (multi-bulletin replay + time control) and builds the stateful, agent-based model as a **separate, independent mode** in `agent/` — its own execution (`step(dt)`), agent-executed scenarios, and a clearance feedback loop (CFL/HDG/DCT/SPD). The two modes share only `shared/`. Physics stays simple and ground-speed based — no BADA. See `docs/SIMULATION.md` for the full description, the phase plan, and the decisions log. Replay's only remaining feature is time control; do not add anything else *inside* `sample(t)`.
 
 ## External dependency: libasterix
 
@@ -49,6 +69,6 @@ CAT-062 encoding is **not** implemented in this repo — it comes from the `liba
 
 ## Conventions worth knowing
 
-- Unit conversions happen at the OpenSky boundary: `StateVector::altitude_feet()` converts metres→feet, `velocity_to_cartesian` (from libasterix) converts polar→Cartesian. Downstream code works in ASTERIX-native units.
+- Unit conversions happen at the OpenSky boundary: `StateVector::altitude_ft()` converts metres→feet, `velocity_to_cartesian` (from libasterix) converts polar→Cartesian. Downstream code works in ASTERIX-native units.
 - `track_number` is derived by hashing the 24-bit ICAO address to 12 bits (`icao_to_track_number`). Collisions are possible but accepted — this is a simulator, not an operational system.
-- Records with no lat/lon are silently dropped in `state_to_cat062` (returns `None`, filtered by `filter_map`). A fetch of N states commonly yields fewer than N records.
+- Records with no lat/lon are silently dropped in `state_to_cat062` (`live/run.rs`) — returns `None`, filtered by `filter_map`. A fetch of N states commonly yields fewer than N records.

@@ -484,7 +484,7 @@ fn parse_hhmm(s: &str) -> Option<u32> {
 mod tests {
     use super::*;
 
-    const BULLETIN: &str = include_str!("../simulations/lsgg_lfpg.txt");
+    const BULLETIN: &str = include_str!("../../simulations/lsgg_lfpg.txt");
 
     /// A flight-log-only extract (no FPL, runway analysis or wind sections)
     const EXTRACT: &str = "\
