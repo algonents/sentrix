@@ -38,6 +38,13 @@ fn parse_brief_paths(flag: &str) -> Result<Option<Vec<String>>> {
     }
 }
 
+/// Single value following `flag` (e.g. `--performance <dir>`), if present.
+fn parse_flag_value(flag: &str) -> Option<String> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let i = args.iter().position(|a| a == flag)?;
+    args.get(i + 1).filter(|v| !v.starts_with("--")).cloned()
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     println!("Sentrix - OpenSky to ASTERIX CAT062 converter");
@@ -45,6 +52,7 @@ async fn main() -> Result<()> {
 
     let agent_paths = parse_brief_paths("--agent")?;
     let replay_paths = parse_brief_paths("--simulate")?;
+    let performance_dir = parse_flag_value("--performance");
 
     // Load configuration
     let config = Config::load().context("Failed to load configuration")?;
@@ -58,7 +66,9 @@ async fn main() -> Result<()> {
     println!("UDP publisher ready: -> {}", config.udp.destination);
 
     match (agent_paths, replay_paths) {
-        (Some(paths), _) => run_agent(&config, &paths, &publisher).await,
+        (Some(paths), _) => {
+            run_agent(&config, &paths, &publisher, performance_dir.as_deref()).await
+        }
         (None, Some(paths)) => run_replay(&config, &paths, &publisher).await,
         (None, None) => run_live(&config, &publisher).await,
     }

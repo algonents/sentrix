@@ -8,4 +8,5 @@
 //! the clearance channel (Phase 4) build on top of this.
 
 pub mod aircraft;
+pub mod performance;
 pub mod run;
