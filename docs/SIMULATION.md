@@ -450,18 +450,40 @@ Notes (not tasks):
   overshoot is directly visible on the scope). Skip unless conflict-prediction
   (MTCD) fidelity is wanted.
 
-- [ ] Optional fidelity upgrade: source the rate limits per aircraft type from
-  **OpenAP/WRAP** (TU Delft, LGPL-3.0, https://github.com/TUDelft-CNS-ATM/openap)
-  instead of hardcoded constants. WRAP is a purely kinematic model (speed,
-  altitude, vertical rate per flight phase, derived from ADS-B data) — the
-  same modeling philosophy as the agent, so it does not reopen the no-BADA
-  decision. The briefing already provides the aircraft type; the WRAP data
-  tables are portable to Rust static tables (mind LGPL attribution if
-  embedded). This matters most for clearances: a mid-flight "climb FL360"
-  has no SimBrief profile to follow, so per-type rates are what make the
-  maneuver realistic. Related prior art: **BlueSky** (same TU Delft group), an
-  open ATM simulator whose command stack (ALT/HDG/SPD/DCT) closely matches our
-  clearance-channel protocol — a good reference for clearance semantics and LNAV.
+- [ ] **OpenAP Slice 1 — per-type vertical rates (ROC/ROD).** Replace the
+  agent's flat 2000 fpm cap with a type + altitude-dependent climb/descent rate
+  from OpenAP's kinematic data. Pure m/s→fpm, no airspeed math; fixes the climb
+  lag (A320 ≈ 2478 fpm low → ≈ 1039 fpm near cruise — flat 2000 is too slow
+  early, too fast high; see the DJL crossing). Steps:
+
+  - [ ] Vendor the WRAP tables (`data/wrap/*.txt`, junzis/openap, LGPL-3.0) for
+    the brief's aircraft types, with LICENSE/attribution.
+
+  - [ ] Add `shared/performance.rs`: parse WRAP, expose ROC/ROD + CAS/Mach
+    crossover altitudes per ICAO type; map briefing type → key (`A320` → `a320`).
+
+  - [ ] In `step(dt)`, select the climb/descent phase by altitude and use that
+    rate as the vertical-rate cap.
+
+  - [ ] Verify at the DJL crossing: the agent reaches the planned FL at the fix.
+
+- [ ] **OpenAP Slice 2 — speed schedule (CAS/Mach → GS).** Drive target speeds
+  from the per-type climb/cruise/descent CAS & Mach (+ cruise ceiling), so
+  maneuvers with **no brief profile** — clearance climbs ("climb FL360"),
+  brief-less Phase-3 flights — are realistic. Depends on Slice 1; lands with or
+  before Phase 4. Steps:
+
+  - [ ] Port ISA standard atmosphere + CAS/Mach → TAS from OpenAP `aero.py`.
+
+  - [ ] Extend `shared/performance.rs` with the climb/cruise/descent CAS & Mach
+    schedule + crossover altitudes.
+
+  - [ ] In `step(dt)`, use the schedule for target speed (TAS → GS via wind)
+    whenever no brief profile applies.
+
+Both slices use only OpenAP's *kinematic* data — the kinetic (thrust/drag/fuel)
+half stays out, so the no-BADA decision holds. *(Prior art: BlueSky, same group,
+whose ALT/HDG/SPD/DCT command stack matches our clearance protocol.)*
 
 #### Phase 3 — Scenarios: agents execute a given situation (open-loop; days)
 
