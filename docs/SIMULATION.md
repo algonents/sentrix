@@ -457,27 +457,40 @@ OpenAP format — and **never the OpenAP data**: that data is **GPL-3.0**
 (`openap/data/`), incompatible with sentrix's MIT licence, so it is not
 vendored. A user supplies a performance file at runtime (an OpenAP WRAP file
 they obtained, or entirely different numbers in the same shape). With no file,
-the agent uses the built-in default constants — today's behaviour.
+the agent uses the built-in default constants — today's behaviour. Both slices
+**reimplement OpenAP's logic in idiomatic Rust** (typed structs, a `FlightPhase`
+enum — not a transliteration); the Python in `kinematic.py` / `aero.py` is the
+behavioural reference to match and **test against**, never transcribed.
+(Reference checkout: `~/Repos/openap`.)
 
 - [ ] **OpenAP Slice 1 — per-type vertical rates (ROC/ROD).** Drive the
   climb/descent rate cap from the provider instead of the flat 2000 fpm; fixes
   the climb lag (A320 ≈ 2478 fpm low → ≈ 1039 fpm near cruise; see the DJL
-  crossing). Pure m/s→fpm, no airspeed math. Steps:
+  crossing). m/s→fpm, no airspeed math. Steps:
 
   - [ ] Define a `PerformanceModel` trait (in `agent/performance.rs`) the agent
-    consults for climb/descent rate by aircraft type + altitude. Ship a
-    **default** impl = today's hardcoded constants, used when no file is loaded
-    (works out of the box).
+    consults for climb/descent rate by aircraft type + altitude, with a
+    **default** impl = today's constants (used when no file is loaded).
 
-  - [ ] Add an **OpenAP WRAP loader** impl that parses a *user-supplied* WRAP
-    file (`data/wrap/*.txt` format, path via config) — not shipped with sentrix.
-    Map the briefing aircraft type → WRAP key (`A320` → `a320`).
+  - [ ] **OpenAP WRAP loader** — reimplements `openap/kinematic.py::WRAP`. Parse
+    a *user-supplied* fixed-width `data/wrap/<type>.txt` and expose the vertical
+    rates `ic_vs_avg`, `cl_vs_avg_{pre_cas,cas_const,mach_const}`,
+    `de_vs_avg_{mach_const,cas_const,after_cas}` + crossover altitudes
+    `cl_h_{cas,mach}_const`, `de_h_{mach,cas}_const` (take the `default`/opt
+    column, as `_get_var`). Convert SI → ours (m/s→fpm, km→ft). Resolve the
+    briefing type by lower-casing + the `_synonym.csv` fallback (as
+    `WRAP.__init__`). Not shipped — read from a user-set path.
 
-  - [ ] In `step(dt)`, take the vertical-rate cap from the provider (fall back to
-    the default for unknown types / no file).
+  - [ ] In `step(dt)`, select the climb/descent phase by altitude vs the
+    crossover altitudes and use that rate as the vertical-rate cap (fall back to
+    the default for unknown type / no file).
 
-  - [ ] Verify at the DJL crossing with an OpenAP file loaded: the agent reaches
-    the planned FL at the fix.
+  - [ ] Validate against the reference: a unit test asserting our parsed values +
+    phase selection equal `openap.WRAP('A320')` (e.g. `climb_vs_concas()` →
+    `cl_vs_avg_cas_const`); capture a few numbers from the Python as fixtures.
+
+  - [ ] Verify at the DJL crossing with a WRAP file loaded: the agent reaches the
+    planned FL at the fix.
 
 - [ ] **OpenAP Slice 2 — speed schedule (CAS/Mach → GS).** Extend the provider
   with per-type climb/cruise/descent CAS & Mach (+ cruise ceiling), so maneuvers
@@ -485,14 +498,17 @@ the agent uses the built-in default constants — today's behaviour.
   Phase-3 flights — are realistic. Depends on Slice 1; lands with/before Phase 4.
   Steps:
 
-  - [ ] Reimplement the ISA standard-atmosphere CAS/Mach → TAS conversion (a
-    public standard — only OpenAP's *data* is off-limits, not the formulas).
+  - [ ] Reimplement the ISA atmosphere + airspeed conversions from
+    `openap/aero.py` in idiomatic Rust: `atmos(h, dT)` (11 km tropopause split +
+    the ISA constants), `vsound`, `cas2tas`, `mach2tas` (and `crossover_alt` if
+    used). Test outputs match `aero.*` at sample altitudes.
 
-  - [ ] Extend the `PerformanceModel` trait + the OpenAP loader with the speed
-    schedule.
+  - [ ] Extend the trait + WRAP loader with the speed schedule:
+    `cl_v_cas_const`, `cl_v_mach_const`, `cr_v_cas_mean`, `cr_v_mach_mean`,
+    `de_v_cas_const`, `de_v_mach_const`, and ceiling `cr_h_max`.
 
-  - [ ] In `step(dt)`, use the schedule for target speed (TAS → GS via wind) when
-    no brief profile applies.
+  - [ ] In `step(dt)`, use the schedule for target speed — CAS/Mach → TAS (the
+    conversion) → GS via wind — when no brief profile applies.
 
 Both slices use only OpenAP's *kinematic* numbers — the kinetic (thrust/drag/
 fuel) half stays out, so the no-BADA decision holds. **Licensing:** OpenAP data
