@@ -360,13 +360,16 @@ controller story becomes the priority.
   **global** offset so the replay opens at, e.g., t=25 min — debug a late event
   without waiting (or scrubbing) to it. One clock for the whole replay, not
   per-flight.
-- [ ] Both are loop-level (scale/offset the elapsed clock fed to `sample`); they
-  touch neither `sample(t)` nor the agent migration, so they carry over
+
+Notes (not tasks):
+
+- Both flags are loop-level (scale/offset the elapsed clock fed to `sample`);
+  they touch neither `sample(t)` nor the agent migration, so they carry over
   verbatim once execution becomes agent-based.
-- [ ] Granularity caveat: the publish tick stays `poll_interval_secs`, so at
-  high `--speed` successive published positions are far apart (≈7 NM at jet
-  speed for a 5 s tick × 10). Fine for visualization; drop `poll_interval_secs`
-  if a smoother track is wanted.
+- Granularity caveat: the publish tick stays `poll_interval_secs`, so at high
+  `--speed` successive published positions are far apart (≈7 NM at jet speed for
+  a 5 s tick × 10). Fine for visualization; drop `poll_interval_secs` if a
+  smoother track is wanted.
 - Track lifecycle stays minimal by decision: an arrived flight holds its last
   (ground) position indefinitely — no track-termination or coast handling.
 
