@@ -66,7 +66,7 @@ the replay has started.
   fixed table.
 - **Real time only.** Wall-clock drives the sample; a 45-minute flight takes
   45 minutes. No acceleration or jump-to-time yet (cheap to add — see
-  phase 1).
+  Phase 1).
 - **One aircraft.** One path, one identity, one record per datagram.
 - **Minimal CAT-062 records.** Only position, altitude, vx/vy, callsign,
   track number and time-of-day are populated; `track_status` is hardwired
@@ -86,7 +86,7 @@ the replay has started.
   departure/arrival legs, but a tracker or smoothing filter comparing
   vx/vy against successive positions will see a small systematic bias on
   accelerating segments. Deliberately not fixed in replay (it would be
-  investment inside `sample(t)`): the phase 3 agent erases it by
+  investment inside `sample(t)`): the agent phase erases it by
   construction, since `step(dt)` integrates position *from* the current
   GS, making reported speed and positional derivative identical by
   definition, with acceleration an explicit rate limiter.
@@ -103,7 +103,17 @@ aircraft execute. The near-term driver is **debugging complex visualization
 scenarios** (CWP-style consumers of the CAT-062 feed); the controller loop is
 the long-term capability.
 
+The architecture splits cleanly in two. **Replay** stays a bounded,
+deterministic playback engine — play given bulletins concurrently, control time
+(accelerate, jump-to-start), nothing more. **Controllable flights, scenarios and
+clearances are agent-based**: a scenario is something *agents execute*, not
+something replay authors. The sections below describe the agent era; replay's
+own roadmap is just time control (Phase 1).
+
 ### SimBrief OFPs as templates
+
+*(Agent era — Phase 3. Replay has no scenario concept; this is the scenario
+model the agents consume.)*
 
 We do not build our own flight-profile generator and we do not generate route
 geometry. SimBrief profiles are built from real aircraft performance, real
@@ -112,20 +122,18 @@ faithful imitation. Producing an OFP is however a manual per-flight workflow,
 so OFPs become **templates**: one bulletin can be instantiated many times with
 variations.
 
-Variations that preserve realism (they transform profile columns, never
-invent geometry):
+Variations preserve realism — they set each agent's **initial intent** at
+spawn, never invent geometry:
 
 - **Identity** — callsign / icao_address / registration per instance.
-- **Start offset** — staggered departures; negative offsets spawn a flight
-  already en route via `sample(offset + elapsed)`.
-- **Speed scaling** — scale the GS/TAS columns by a factor; the timeline
-  recomputes automatically because time is derived from distance ÷ GS.
-  Design rule: apply the factor to the waypoint GS columns **before**
-  V2/VREF profile synthesis and leave V2/VREF untouched, so takeoff and
-  landing speeds stay honest while the en-route portion scales.
-- **Cruise level shift** — shift the cruise plateau (the max-altitude run of
-  waypoints) ±1000/2000 ft.
-- **Lateral offset** — small parallel offsets (SLOP-like, 1–2 nm).
+- **Start offset** — staggered departures; a flight can also spawn already en
+  route by initialising the agent partway along its plan.
+- **Speed scaling** — a different initial target speed (in replay terms, the
+  en-route GS the agent aims for). V2/VREF stay untouched, so takeoff and
+  landing speeds remain honest while the en-route portion scales.
+- **Cruise level shift** — a different initial cleared FL for the cruise plateau
+  (±1000/2000 ft).
+- **Lateral offset** — a small parallel-route offset (SLOP-like, 1–2 nm).
 
 Out of scope by decision: reversing routes, splicing templates, waypoint
 perturbation — that is route generation, which stays external (it would
@@ -160,52 +168,56 @@ Caveats:
 
 ### Criteria-based generation: the scenario solver
 
-Replay timelines are **closed-form functions of time** — every flight's
-position(t) is known before anything runs. This makes criteria-based scenario
+*(Part of Phase 3.)* A Phase 3 scenario is **open-loop**: with no clearances,
+every agent's trajectory is determined by its plan before anything runs —
+effectively a closed-form function of time. That makes criteria-based scenario
 generation a solver problem, not a simulation problem:
 
 - *"Where/when does separation between these two flights drop below 5 nm?"*
-  — walk both timelines, report closest approach. No simulation run needed.
-- *"Make the overtake happen at waypoint PAS"* — solve for the
-  `start_offset_s` that co-locates both aircraft at PAS.
+  — walk both trajectories, report closest approach. No run needed.
+- *"Make the overtake happen at waypoint PAS"* — solve for the start offset
+  that co-locates both aircraft at PAS.
 - *"Crossing conflict at fix X at the same FL, 600 s into the scenario"* —
-  solve each flight's offset so both reach X at t=600; `cruise_shift_ft`
-  puts them at the same level.
+  solve each flight's offset so both reach X at t=600; an initial cleared-FL
+  shift puts them at the same level.
 
-Catch-up/in-trail scenarios (same path, one aircraft faster) are pure
-configuration; the solver turns hand-tuned offsets into declarations. Build
-the solver **on the replay model** — in the agent model trajectories are no
-longer closed-form and the same questions get much harder. Solver outputs
-(offsets, shifts) remain valid as agent initial conditions.
+Catch-up/in-trail scenarios (same route, one aircraft faster) are pure
+configuration; the solver turns hand-tuned offsets into declarations. The
+tractability holds **only while the scenario is open-loop** — once the
+clearance channel (Phase 4) perturbs a running scenario, trajectories are no
+longer predetermined and the same questions get much harder. Solver outputs
+(offsets, shifts) are the scenario's initial conditions.
 
 ### What replay supports well — and what it cannot
 
-**Phase 1 (multi-flight replay) covers ~80% of visualization debugging:**
+**Deterministic playback covers much of visualization debugging:**
 
-- **Determinism is the killer feature**: a scenario reproduces identically
-  every run, so a rendering bug ("label overlap when SWR12K crosses AFR332
-  near PAS") becomes a repeatable test case. Live OpenSky data can never do
-  this, and even the agent model is less deterministic once interactive
-  clearances enter.
-- Density/clutter (label anti-overlap, track tables, render performance at
-  50–200 targets), geometric edge cases on demand (crossings, convergence,
-  pop-in via negative offsets), full climb/descent profiles.
+- **Determinism is the killer feature**: a given set of bulletins reproduces
+  identically every run. Constructing a *specific* geometry ("label overlap
+  when SWR12K crosses AFR332 near PAS") is a Phase 3 scenario — but once
+  authored it too replays bit-identically, because open-loop execution is
+  deterministic. Live OpenSky data can never do this, and even the agent model
+  loses determinism once interactive clearances enter.
+- Pure replay already exercises density/clutter (label anti-overlap, track
+  tables, render performance at 50–200 targets from real OFPs) and full
+  climb/descent profiles; *constructed* edge cases (crossings, convergence)
+  come with Phase 3 scenarios.
 
-Known gaps for visualization debugging, all cheap, all carrying over to the
-agent model (they are loop-level, not `sample`-level, so they do not violate
-the replay freeze):
+Remaining loop-level items (all cheap, all carrying over to the agent model —
+they are loop-level, not `sample`-level, so they do not violate the replay
+freeze):
 
 1. **Time control** — accelerate / jump-to-time by scaling or offsetting the
    elapsed clock in the loop. Multiplies the value of everything else
    (debugging an event 25 min into a scenario must not cost 25 min per
-   iteration).
+   iteration). **This is Phase 1** (see Phasing).
 2. **CAT-062 field audit** — whatever fields the consumer renders beyond our
    minimal set go untested (ROCD, mode-of-flight, coasting flags). Audit the
    consumer's reads against our writes. Remember the libasterix gap:
    `icao_address` never reaches the wire (see CLAUDE.md).
-3. **Track lifecycle** — flights currently never end (hold last position
-   forever); add a terminate-after-arrival option so track drop/coast
-   rendering is exercised.
+3. **Track lifecycle** — by decision, an arrived flight just holds its last
+   (ground) position indefinitely; no track-termination or coast handling is
+   added (not worth the complexity for a visualization feed).
 4. **Heading snaps at waypoints** — instantaneous track changes make speed
    vectors jump. Cosmetic; fixed for free by the agent's turn dynamics, not
    worth fixing in replay.
@@ -217,8 +229,8 @@ clearances by rebuilding the remaining timeline from the current interpolated
 position — it almost works for altitude/speed changes but collapses for
 heading vectors (an assigned heading has no waypoint geometry to build a
 timeline from), and amounts to a worse intent model inside replay code. The
-division of labor is: phase 1 + solver *create* the situation; the agent +
-clearance channel let someone *fix* it.
+division of labor is: scenarios (Phase 3) *create* the situation; the clearance
+channel (Phase 4) lets someone *change* it.
 
 ### Clearance feedback loop: replay → agent
 
@@ -268,8 +280,8 @@ decision below retained it as a permanent mode). Layer by layer:
 | Plan | `FlightPath` construction: gap-filling, V2/VREF synthesis, distance÷GS timeline, bearings | Survives with a role change: from *answer* ("where am I at t") to *intent* (route + GS/alt targets). `time_s` stays useful for the solver and ETAs |
 | Execution | `FlightPath::sample()` interpolation | Joined by `Aircraft::step(dt)` as a second, coexisting mode (see below); replay stays frozen |
 | Output | `Cat062Record` conversion, `encode_cat062_block`, `publisher.rs` | Untouched; indifferent to interpolation vs integration |
-| Scenario | TOML config, variations, multi-flight loop, solver | Untouched; describes initial conditions + flight plans, exactly what agents consume. Loop changes one call: `path.sample(t)` → `aircraft.step(dt)` |
-| Loop extras | Time control, command channel, track lifecycle | Loop-level; carry over |
+| Multi-flight & scenarios | Multi-flight loop (shipped); scenario authoring + solver (Phase 3) | The loop is execution-agnostic — it batches one record per flight whether `sample(t)` or `step(dt)` produced it. Authoring + solver are built in the agent era and consume agent intent directly, so there is nothing to write off |
+| Loop extras | Time control (Phase 1), clearance command channel (Phase 4) | Loop-level; mode-agnostic, carry over |
 
 The discipline that keeps this true: **no new features inside `sample(t)`**.
 New capability attaches to the plan, the scenario, the loop, or the output —
@@ -278,7 +290,7 @@ never to the interpolation.
 ### Mode coexistence (decided 2026-06-13)
 
 Replay and agent execution **coexist permanently**; replay is not retired
-after the agent lands (this amends the original phase 3 plan, which deleted
+after the agent lands (this amends the original agent-phase plan, which deleted
 `sample()` after the parity test). Rationale:
 
 - Replay is the **deterministic gold standard**: identical output every run,
@@ -308,41 +320,60 @@ ignored.
 
 ### Phasing
 
-Ordering rationale: each phase consumes the previous one's output and nothing
-is rework. Alternative ordering is legitimate if the controller demo becomes
-the priority: do phase 3+4 for a single aircraft first, then phase 1 — the
-phasing minimizes rework but is not sacred.
+Replay itself has **no scenario concept**: it plays one or more bulletins
+concurrently (shipped) with time control on top (Phase 1), and nothing more.
+All multi-flight situation authoring lives in the agent era — a conflict is
+only meaningful once something can *act* on it.
 
-#### Phase 1 — Multi-flight scenario player (replay-based; days)
+Ordering follows two principles — do what is *unblocked* first, and add
+*non-determinism last*:
 
-- [ ] Scenario TOML (`--scenario <file>`, keeping `--simulate <bulletin>` as the
-  single-flight shortcut): per-flight `template`, `callsign`, `icao_address`,
-  `start_offset_s`, `speed_factor`, `cruise_shift_ft`, `lateral_offset_nm`.
-- [ ] Variations implemented as transforms on the waypoint columns before
-  `FlightPath` construction; `speed_factor` applied before V2/VREF synthesis.
-- [x] Multi-flight loop: a `Vec` of (path, identity, offset) instances, sample
-  each per tick, batch all records into **one** `encode_cat062_block` per
-  tick (live mode already proves multi-record blocks downstream).
-  *(via `--simulate <path>...`; the `offset` field awaits the scenario TOML.)*
-- [x] icao_address → 12-bit track-number collision detection at scenario load
-  (reject or remap).
-- [ ] For visualization debugging, include: time control (scale + start offset),
-  terminate-after-arrival option, and the CAT-062 field audit against the
-  actual consumer.
+- **Time control (Phase 1)** needs only the current replay loop and multiplies
+  the value of every later phase, so it comes first.
+- **The agent (Phase 2)** is the structural change everything situational
+  depends on, so it precedes scenarios.
+- **Scenarios (Phase 3)** feed many agents a *given* situation they execute
+  open-loop — no intervention, so it reproduces identically every run.
+- **The clearance channel (Phase 4)** adds the feedback loop that perturbs a
+  *running* scenario. It is the only phase that introduces non-determinism, so
+  it lands last.
 
-#### Phase 2 — Scenario solver (replay timelines are closed-form; days)
+The phasing minimizes rework but is not sacred; doing Phase 2 for a single
+aircraft and jumping to a minimal clearance demo is legitimate if the
+controller story becomes the priority.
 
-- [ ] Closest-approach report between any two flights (where/when separation
-  drops below a threshold).
-- [ ] Offset solving: co-locate two flights at a chosen fix / chosen time
-  (overtake at PAS, crossing conflict at X at t=600).
-- [ ] Build on replay before the agent migration; outputs remain valid as agent
-  initial conditions.
+#### Already shipped — replay engine
 
-#### Phase 3 — Kinematic agent (the structural change; up to a week)
+- [x] Multi-flight loop: a `Vec` of (path, identity) instances, sample each per
+  tick, batch all records into **one** `encode_cat062_block` per tick
+  (`--simulate <bulletin>...`).
+- [x] `icao_address` → 12-bit track-number collision detection at load (reject
+  or remap).
 
-- [ ] `Aircraft` with state (lat, lon, alt_ft, gs_kts, track_deg) + intent
-  (cleared FL, LNAV-route-or-assigned-heading, target speed) + `step(dt)`
+#### Phase 1 — Time control (loop-level; ~a day)
+
+- [ ] `--speed <factor>` time-scale multiplier: the sim loop advances the
+  elapsed clock by `tick × factor` instead of real seconds, so a 45-min flight
+  replays in 4.5 min at `--speed 10`. Default `1.0` is today's real-time
+  behaviour; live mode ignores it (OpenSky is inherently real-time).
+- [ ] `--start-at <hms|secs>` jump-to-time: seed the elapsed clock with a
+  **global** offset so the replay opens at, e.g., t=25 min — debug a late event
+  without waiting (or scrubbing) to it. One clock for the whole replay, not
+  per-flight.
+- [ ] Both are loop-level (scale/offset the elapsed clock fed to `sample`); they
+  touch neither `sample(t)` nor the agent migration, so they carry over
+  verbatim once execution becomes agent-based.
+- [ ] Granularity caveat: the publish tick stays `poll_interval_secs`, so at
+  high `--speed` successive published positions are far apart (≈7 NM at jet
+  speed for a 5 s tick × 10). Fine for visualization; drop `poll_interval_secs`
+  if a smoother track is wanted.
+- Track lifecycle stays minimal by decision: an arrived flight holds its last
+  (ground) position indefinitely — no track-termination or coast handling.
+
+#### Phase 2 — Kinematic agent (the structural change; up to a week)
+
+- [ ] `Aircraft` with state (lat, lon, `altitude_ft`, `gs_kts`, `track_deg`) +
+  intent (cleared FL, LNAV-route-or-assigned-heading, target speed) + `step(dt)`
   with the four rate limiters.
 - [ ] Optional fidelity upgrade: source the rate limits per aircraft type from
   **OpenAP/WRAP** (TU Delft, LGPL-3.0, https://github.com/TUDelft-CNS-ATM/openap)
@@ -353,29 +384,45 @@ phasing minimizes rework but is not sacred.
   tables are portable to Rust static tables (mind LGPL attribution if
   embedded). This matters most for clearances: a mid-flight "climb FL360"
   has no SimBrief profile to follow, so per-type rates are what make the
-  maneuver realistic. Assessed 2026-06-12 as not worth doing earlier than
-  this phase — in replay, intra-leg precision gains are invisible to the
-  consumer. Related prior art: **BlueSky** (same TU Delft group), an open
-  ATM simulator whose command stack (ALT/HDG/SPD/DCT) closely matches our
-  phase 4 protocol — a good reference for clearance semantics and LNAV.
+  maneuver realistic. Related prior art: **BlueSky** (same TU Delft group), an
+  open ATM simulator whose command stack (ALT/HDG/SPD/DCT) closely matches our
+  clearance-channel protocol — a good reference for clearance semantics and LNAV.
 - [ ] LNAV: waypoint sequencing, turn anticipation, rejoin-route after vector.
 - [ ] `FlightPath` becomes the plan; targets derived from it per phase.
-- [ ] **Regression test**: uncleared agent flying its plan matches replay output
-  within tolerance. Replay is **not** deleted afterwards — it remains a
+- [ ] **Regression test**: an uncleared agent flying its plan matches replay
+  output within tolerance. Replay is **not** deleted afterwards — it remains a
   permanent coexisting mode (see "Mode coexistence" above); the parity test
   becomes a standing check rather than a one-off migration gate.
 - [ ] Tick-rate detail: at 3°/s a 5 s publish tick is a 15° heading jump —
-  integrate internally at ~1 s sub-steps, publish every
-  `poll_interval_secs`.
+  integrate internally at ~1 s sub-steps, publish every `poll_interval_secs`.
 
-#### Phase 4 — Clearance channel (days)
+#### Phase 3 — Scenarios: agents execute a given situation (open-loop; days)
 
-- [ ] `tokio::select!` over tick timer + command source (UDP or TCP lines).
+- [ ] Scenario file (`--scenario <file>`): a list of flights, each = a SimBrief
+  OFP `template` + identity + **initial intent** (start offset, initial cleared
+  FL, initial target speed, route/lateral offset). The agents execute it
+  autonomously — no clearances — so a scenario reproduces identically every run.
+- [ ] Variations expressed as agent **intent** at spawn, not timeline
+  transforms: cruise-level shift → initial cleared FL, speed scaling → initial
+  target speed, lateral offset → parallel-route offset. Geometry is never
+  invented (no route synthesis).
+- [ ] Conflict authoring + solver: an uncleared agent's trajectory is still
+  determined by its plan before anything runs (effectively closed-form), so
+  criteria-based generation stays a *solver* problem — closest-approach report
+  between two flights, and offset solving (co-locate at a fix / at a time:
+  overtake at PAS, crossing at X at t=600).
+- [ ] `icao_address` collision remap (shipped) applies at scenario load.
+
+#### Phase 4 — Clearance channel: close the loop (days)
+
+- [ ] `tokio::select!` over the tick timer + a command source (UDP or TCP lines).
 - [ ] Text protocol: `<CALLSIGN> CFL <fl> | HDG <deg> | DCT <wpt> | SPD <kts>`,
-  with simple ack/error replies.
-- [ ] This phase completes the controller-in-the-loop story: solver authors the
-  conflict → agents fly it → CWP displays it → controller sends
-  `SWR22B SPD 250` → the agent's intent updates and the situation resolves.
+  with simple ack/error replies. Each clearance writes a target into the
+  addressed agent's intent, perturbing the running scenario.
+- [ ] Completes the controller-in-the-loop story: Phase 3 authors the conflict →
+  agents fly it open-loop → CWP displays it → controller sends `SWR22B SPD 250`
+  → the agent's intent updates and the situation resolves. A clearance addressed
+  to a replay-mode flight is rejected explicitly.
 
 ### Decisions log
 
@@ -383,20 +430,24 @@ phasing minimizes rework but is not sacred.
   of route geometry and nominal profiles (used as templates).
 - 2026-06-12 — Physics stays GS-based kinematics; BADA-style point-mass
   models rejected.
-- 2026-06-12 — Variations transform profile columns only; route geometry is
-  never invented.
+- 2026-06-12 — Variations never invent route geometry (only identity, speed,
+  level, lateral offset). *Updated 2026-06-13:* expressed as each agent's
+  **initial intent** at spawn, not as replay profile-column transforms, since
+  scenarios are agent-era.
 - 2026-06-12 — `sample(t)`-based features are frozen: the agent model
-  (phase 3) retires interpolation as the execution model. Loop-level
-  features (time control, track lifecycle, command channel) are exempt —
-  they carry over.
+  retires interpolation as the execution model. Loop-level
+  features (time control, command channel) are exempt — they carry over.
 - 2026-06-12 — Rejected: faking clearances in replay by rebuilding the
   remaining timeline from the current position (collapses for heading
   vectors; duplicates the intent model badly).
-- 2026-06-12 — Scenario solver is built on replay timelines (closed-form)
-  before the agent migration; in the agent model the same questions are
-  much harder.
-- 2026-06-12 — `speed_factor` applies to waypoint GS columns before V2/VREF
-  profile synthesis; V2/VREF are never scaled.
+- 2026-06-12 — Criteria-based scenario generation is a solver problem
+  (closest-approach, offset solving) that exploits closed-form trajectories.
+  *Updated 2026-06-13:* the solver is part of Phase 3 (agent-era); its
+  tractability comes from scenarios being **open-loop** (uncleared agents are
+  deterministic) and ends once clearances perturb a running scenario.
+- 2026-06-12 — `speed_factor` scales en-route speed only; V2/VREF (takeoff/
+  landing) are never scaled, so those stay honest. *Updated 2026-06-13:* in the
+  agent era this is an initial target-speed setting, not a GS-column transform.
 - 2026-06-12 — Migration write-off is bounded to `FlightPath::sample()`
   (~50 lines); everything else (parser, plan construction, output path,
   scenario layer) carries over to the agent model.
@@ -407,7 +458,23 @@ phasing minimizes rework but is not sacred.
 - 2026-06-13 — **Mode coexistence**: replay and agent execution coexist
   permanently, selectable per flight; mixed scenarios (replayed background
   traffic + agent-mode controlled aircraft) are a supported configuration.
-  Amends the 2026-06-12 phase 3 plan to delete `sample()` after parity —
+  Amends the 2026-06-12 agent-phase plan to delete `sample()` after parity —
   the migration write-off drops to zero and the parity test becomes a
   standing check. Clearances addressed to replay-mode flights are rejected
   explicitly.
+- 2026-06-13 — **Time control is its own phase (Phase 1)**: a `--speed`
+  time-scale multiplier + a global `--start-at` jump-to-time, both CLI flags,
+  default `--speed 1.0`. Loop-level (scale/offset the elapsed clock, not
+  `sample(t)`), so it carries over to the agent model. Excludes pause/step.
+- 2026-06-13 — **Scenarios removed from replay.** Replay is a bounded,
+  deterministic playback engine — concurrent multi-bulletin replay (shipped) +
+  time control (Phase 1), nothing more. All situation authoring (templates,
+  variations, solver, conflicts) is agent-era (Phase 3), because a conflict is
+  only meaningful once something can *act* on it.
+- 2026-06-13 — **Open-loop before closed-loop.** Phase order: time control (1)
+  → kinematic agent (2) → scenarios the agents execute autonomously (3,
+  deterministic) → clearance channel (4, the feedback loop that perturbs a
+  running scenario). Non-determinism lands last.
+- 2026-06-13 — **No track termination.** An arrived flight holds its last
+  (ground) position indefinitely; no coast/drop handling — unnecessary
+  complexity for a visualization feed.
