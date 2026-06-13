@@ -380,8 +380,34 @@ Notes (not tasks):
   integration). *Intent is plan-derived for now — targets come from the active
   leg; explicit clearance intent (cleared FL / assigned heading) arrives in
   Phase 4.*
+
 - [x] LNAV — active-waypoint steering + sequencing (capture radius + overshoot
   guard). *First cut sequences on a fixed 1 nm capture.*
+
+- [x] `FlightPlan` (shared) is the plan; the agent derives per-leg targets (GS,
+  altitude, aim point) from the active waypoint. Built in M0 so replay and the
+  agent fly the same plan.
+
+- [x] Tick-rate detail: at 3°/s a 5 s publish tick is a 15° heading jump —
+  integrate internally at ~1 s sub-steps, publish every `poll_interval_secs`.
+
+- [ ] **Turn anticipation** (essential, currently stubbed): replace the fixed
+  1 nm capture with a computed turn lead, `lead = (GS / turn_rate)·tan(Δtrack/2)`,
+  so the turn begins at the geometrically correct point and rolls out on the next
+  leg. The fixed capture only looks OK at climb speed (~1 nm lead); at cruise
+  (450 kt) the correct lead is ~3–5 nm, so it overshoots every turn and
+  S-wiggles back onto the leg. Observed turning ~1 nm before the fix.
+
+- [ ] **Regression test**: an uncleared agent flying its plan matches replay
+  output within tolerance. Replay is **not** deleted afterwards — it remains a
+  permanent coexisting mode (see "Mode coexistence" above); the parity test
+  becomes a standing check rather than a one-off migration gate. *(Partial: a
+  full-route arrival test exists — the agent flies LSGG→LFPG and arrives near the
+  threshold — but the point-by-point agent-vs-replay comparison is not written.)*
+
+- [ ] LNAV: rejoin-route after a heading vector (needs the `Heading` intent —
+  lands with the clearance channel, Phase 4).
+
 - [ ] *Improvement (low CWP impact, deferred):* speed/altitude **constraint
   scheduling**. Each leg's target GS/altitude is currently chased at a constant
   rate (0.7 kt/s, 2000 fpm) starting when the leg becomes active — i.e. *at* the
@@ -390,6 +416,7 @@ Notes (not tasks):
   changes, which a CWP doesn't surface (unlike turn anticipation, whose lateral
   overshoot is directly visible on the scope). Skip unless conflict-prediction
   (MTCD) fidelity is wanted.
+
 - [ ] Optional fidelity upgrade: source the rate limits per aircraft type from
   **OpenAP/WRAP** (TU Delft, LGPL-3.0, https://github.com/TUDelft-CNS-ATM/openap)
   instead of hardcoded constants. WRAP is a purely kinematic model (speed,
@@ -402,25 +429,6 @@ Notes (not tasks):
   maneuver realistic. Related prior art: **BlueSky** (same TU Delft group), an
   open ATM simulator whose command stack (ALT/HDG/SPD/DCT) closely matches our
   clearance-channel protocol — a good reference for clearance semantics and LNAV.
-- [ ] **Turn anticipation** (essential, currently stubbed): replace the fixed
-  1 nm capture with a computed turn lead, `lead = (GS / turn_rate)·tan(Δtrack/2)`,
-  so the turn begins at the geometrically correct point and rolls out on the next
-  leg. The fixed capture only looks OK at climb speed (~1 nm lead); at cruise
-  (450 kt) the correct lead is ~3–5 nm, so it overshoots every turn and
-  S-wiggles back onto the leg. Observed turning ~1 nm before the fix.
-- [ ] LNAV: rejoin-route after a heading vector (needs the `Heading` intent —
-  lands with the clearance channel, Phase 4).
-- [x] `FlightPlan` (shared) is the plan; the agent derives per-leg targets (GS,
-  altitude, aim point) from the active waypoint. Built in M0 so replay and the
-  agent fly the same plan.
-- [ ] **Regression test**: an uncleared agent flying its plan matches replay
-  output within tolerance. Replay is **not** deleted afterwards — it remains a
-  permanent coexisting mode (see "Mode coexistence" above); the parity test
-  becomes a standing check rather than a one-off migration gate. *(Partial: a
-  full-route arrival test exists — the agent flies LSGG→LFPG and arrives near the
-  threshold — but the point-by-point agent-vs-replay comparison is not written.)*
-- [x] Tick-rate detail: at 3°/s a 5 s publish tick is a 15° heading jump —
-  integrate internally at ~1 s sub-steps, publish every `poll_interval_secs`.
 
 #### Phase 3 — Scenarios: agents execute a given situation (open-loop; days)
 
